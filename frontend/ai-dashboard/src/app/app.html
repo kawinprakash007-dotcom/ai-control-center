@@ -1,0 +1,33 @@
+<div class="container">
+
+  <div class="card">
+
+    <h1>🤖 AI Control Center</h1>
+
+    <input
+      [(ngModel)]="userMessage"
+      placeholder="Speak or type a message"
+    >
+
+    <br><br>
+
+    <button (click)="startListening()">
+      🎤 Speak
+    </button>
+
+    
+
+    <div class="response">
+
+      <h3>Recognized Text</h3>
+
+<p>{{ userMessage || 'No text yet' }}</p>
+
+      <h3>AI Response</h3>
+
+<p>{{ aiResponse || 'No response yet' }}</p>
+    </div>
+
+  </div>
+
+</div>
