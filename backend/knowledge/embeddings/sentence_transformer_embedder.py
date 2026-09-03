@@ -55,3 +55,12 @@ class SentenceTransformerEmbedder(EmbedderInterface):
             )
 
         return embeddings
+
+    def embed_query(
+        self,
+        text: str
+    ) -> list[float]:
+
+        vector = self.model.encode(text)
+
+        return vector.tolist()

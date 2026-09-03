@@ -31,10 +31,11 @@ class IngestionPipeline:
         print("\nLoading document...")
 
         document = self.loader.load(pdf_path)
+        document.collection = collection
 
         print("Chunking...")
-
         chunks = self.chunker.chunk(document)
+
 
         print(f"{len(chunks)} chunks created.")
 
