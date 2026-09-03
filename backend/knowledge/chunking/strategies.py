@@ -50,7 +50,14 @@ class FixedSizeChunker(Chunker):
 
                     text=chunk_text,
 
-                    chunk_index=index
+                    chunk_index=index,
+
+                    metadata={
+                        "document": document.name,
+                        "collection": document.collection,
+                        "chunk": index,
+                        "type": document.document_type
+                    }
 
                 )
 

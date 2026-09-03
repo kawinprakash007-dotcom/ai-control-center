@@ -59,3 +59,11 @@ Thumbs.db
 # ==========================
 
 models/
+
+
+
+# ChromaDB generated data
+backend/knowledge/chroma_db/
+
+# Generated OCR/page images
+backend/temp_page_*.png
