@@ -14,3 +14,5 @@ class TaskType(Enum):
     WAIT = "wait"
 
     DECISION = "decision"
+
+    KNOWLEDGE = "knowledge"

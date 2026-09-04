@@ -6,6 +6,25 @@ class Reasoner:
 
     def reason(self, intent: Intent) -> Goal:
 
+        # Knowledge requests
+        if intent.intent in ("knowledge", "search"):
+
+            return Goal(
+
+                goal="Retrieve Knowledge",
+
+                priority="normal",
+
+                status="pending",
+
+                confidence=intent.confidence,
+
+                reason=intent.reason,
+
+                query=intent.original_message
+
+            )
+
         # Tool requests
         if intent.intent == "tool":
 

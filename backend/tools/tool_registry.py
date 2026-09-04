@@ -14,6 +14,8 @@ from tools.capabilities import (
     vision
 )
 
+from tools.knowledge_capability import KnowledgeCapability
+
 
 TOOL_REGISTRY = {
 
@@ -43,6 +45,8 @@ TOOL_REGISTRY = {
 
     "automation": automation,
 
-    "vision": vision
+    "vision": vision,
+
+    "knowledge": KnowledgeCapability()
 
 }

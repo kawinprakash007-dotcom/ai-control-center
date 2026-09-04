@@ -21,4 +21,4 @@ class Router:
                 message=f"No capability found for '{task.tool}'"
             )
 
-        return self.executor.execute(tool_function)
+        return self.executor.execute(tool_function, task)

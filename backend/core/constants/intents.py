@@ -16,3 +16,5 @@ class IntentType(Enum):
     CODING = "coding"
 
     SEARCH = "search"
+
+    KNOWLEDGE = "knowledge"
