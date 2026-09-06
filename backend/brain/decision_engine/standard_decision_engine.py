@@ -170,13 +170,20 @@ class StandardDecisionEngine(DecisionEngineInterface):
                     routing_hints=routing_hints,
                 )
             if cap == CapabilityType.WEB:
+                action = extra_hints.get("action") or routing_hints.get("action", "search")
+                primary_goal = "web_research" if action == "research" else "web_search"
+                reasoning = (
+                    "Web research workflow identified."
+                    if action == "research"
+                    else "Web exploration query identified."
+                )
                 return Decision(
                     request_id=request.id,
-                    primary_goal="web_search",
+                    primary_goal=primary_goal,
                     required_capabilities=[CapabilityType.WEB],
                     execution_mode=ExecutionMode.SINGLE_STEP,
                     confidence=0.90,
-                    reasoning="Web exploration query identified.",
+                    reasoning=reasoning,
                     routing_hints=routing_hints,
                 )
 
@@ -259,13 +266,15 @@ class StandardDecisionEngine(DecisionEngineInterface):
             hints["url"] = str(request.parameters["url"])
             return True, hints
 
-        if request.parameters.get("action") in ("search", "fetch"):
+        if request.parameters.get("action") in ("search", "fetch", "research"):
             action = str(request.parameters["action"]).strip().lower()
             hints["action"] = action
             if action == "fetch" and "url" in request.parameters:
                 hints["url"] = str(request.parameters["url"])
-            elif action == "search":
-                hints["query"] = str(request.parameters.get("query") or orig)
+            elif action in ("search", "research"):
+                hints["query"] = str(request.parameters.get("query") or request.parameters.get("objective") or orig)
+                if action == "research":
+                    hints["objective"] = hints["query"]
             return True, hints
 
         if request.parameters.get("capability") == "web":
@@ -289,6 +298,24 @@ class StandardDecisionEngine(DecisionEngineInterface):
                 re.IGNORECASE,
             )
         )
+
+        # 3.5 Research Directives
+        research_patterns = [
+            r"\bresearch\b",
+            r"\bcompare\s+(?:several\s+)?sources\b",
+            r"\bdeep\s+search\b",
+            r"\binvestigate\s+online\b",
+            r"\bmulti[- ]source\s+(?:search|research)\b",
+        ]
+        has_research_directive = any(
+            re.search(pat, text, re.IGNORECASE) for pat in research_patterns
+        )
+        if has_research_directive and not has_local_doc_signal:
+            hints["action"] = "research"
+            extracted = self._extract_web_query(orig)
+            hints["query"] = extracted
+            hints["objective"] = extracted
+            return True, hints
 
         # 4. Explicit Web / Online Directives
         explicit_web_patterns = [
@@ -361,6 +388,12 @@ class StandardDecisionEngine(DecisionEngineInterface):
 
         # Remove leading command / question wrappers
         leading_wrappers = [
+            r"^(?:please\s+)?research\s+(?:the\s+)?(?:latest\s+)?(?:about\s+|on\s+)?",
+            r"^(?:please\s+)?research\s+",
+            r"^(?:please\s+)?investigate\s+(?:the\s+)?(?:latest\s+)?(?:about\s+|on\s+)?",
+            r"^(?:please\s+)?investigate\s+",
+            r"^(?:please\s+)?compare\s+(?:several\s+)?sources\s+(?:for|about|on)\s+",
+            r"^(?:please\s+)?deep\s+search\s+(?:for|about|on)\s+",
             r"^(?:please\s+)?search\s+(?:the\s+)?(?:web|internet|online)\s+(?:for|about)\s+",
             r"^(?:please\s+)?search\s+(?:the\s+)?(?:web|internet|online)\s+",
             r"^(?:please\s+)?search\s+for\s+",
@@ -387,6 +420,10 @@ class StandardDecisionEngine(DecisionEngineInterface):
 
         # Remove trailing online / web markers
         trailing_wrappers = [
+            r"\s+and\s+compare\s+(?:several\s+)?sources[.!?]?$",
+            r"\s+comparing\s+(?:several\s+)?sources[.!?]?$",
+            r"\s+across\s+(?:several|multiple)\s+sources[.!?]?$",
+            r"\s+from\s+(?:several|multiple)\s+sources[.!?]?$",
             r"\s+(?:on\s+the\s+web|online|on\s+the\s+internet)[.!?]?$",
         ]
         for pat in trailing_wrappers:
@@ -551,7 +588,20 @@ class StandardDecisionEngine(DecisionEngineInterface):
         hints: Dict[str, Any] = {}
 
         # Safe parameter propagation
-        for key in ("query", "url", "path", "collection", "author", "action"):
+        for key in (
+            "query",
+            "url",
+            "path",
+            "collection",
+            "author",
+            "action",
+            "objective",
+            "max_iterations",
+            "max_searches",
+            "max_fetches",
+            "min_evidence",
+            "queries",
+        ):
             if key in request.parameters:
                 if key == "path" and (re.search(r"https?://", request.normalized_text, re.IGNORECASE) or "url" in extra):
                     continue

@@ -26,6 +26,10 @@ from core.models.web import (
     create_evidence_from_fetch,
     normalize_domain,
     canonicalize_url,
+    Citation,
+    CitationSet,
+    ResearchState,
+    ResearchResult,
 )
 
 __all__ = [
@@ -52,4 +56,8 @@ __all__ = [
     "create_evidence_from_fetch",
     "normalize_domain",
     "canonicalize_url",
+    "Citation",
+    "CitationSet",
+    "ResearchState",
+    "ResearchResult",
 ]

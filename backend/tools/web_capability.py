@@ -4,15 +4,17 @@ from core.interfaces.web_interface import WebProviderInterface
 from core.models.task import Task
 from core.models.web import (
     EvidenceSet,
+    ResearchResult,
     create_evidence_from_search,
     create_evidence_from_fetch,
 )
+from web.research_coordinator import WebResearchCoordinator
 
 
 class WebCapability:
     """
     Adapter between AI Control Center's Tool protocol and WebProviderInterface.
-    Executes web intelligence tasks: SEARCH and FETCH.
+    Executes web intelligence tasks: SEARCH, FETCH, and bounded RESEARCH.
     Produces structured, source-backed EvidenceSet records for downstream reasoning.
     """
 
@@ -21,6 +23,7 @@ class WebCapability:
         Initialize WebCapability with an injected or lazily-retrieved WebProvider.
         """
         self.last_evidence: Optional[EvidenceSet] = None
+        self.last_research_result: Optional[ResearchResult] = None
         if provider is not None:
             self.provider = provider
         else:
@@ -35,6 +38,12 @@ class WebCapability:
         Retrieve the most recently generated evidence set, if any.
         """
         return self.last_evidence
+
+    def get_research_result(self) -> Optional[ResearchResult]:
+        """
+        Retrieve the most recently generated research result, if any.
+        """
+        return self.last_research_result
 
     def __call__(self, task: Optional[Union[Task, str, Dict[str, Any]]] = None) -> str:
         """
@@ -56,6 +65,9 @@ class WebCapability:
             if raw.startswith("http://") or raw.startswith("https://"):
                 action_from_str = "fetch"
                 url_from_str = raw
+            elif raw.lower().startswith("research:") or raw.lower().startswith("research "):
+                action_from_str = "research"
+                query_from_str = raw.split(":", 1)[-1].strip() if raw.lower().startswith("research:") else raw[9:].strip()
             else:
                 action_from_str = "search"
                 query_from_str = raw
@@ -83,12 +95,13 @@ class WebCapability:
             timeout_seconds = 10.0
 
         if not action:
-            raise ValueError("No web action specified. Expected 'search' or 'fetch'.")
+            raise ValueError("No web action specified. Expected 'search', 'fetch', or 'research'.")
 
-        if action not in ("search", "fetch"):
-            raise ValueError(f"Unsupported web action: '{action}'. Expected 'search' or 'fetch'.")
+        if action not in ("search", "fetch", "research"):
+            raise ValueError(f"Unsupported web action: '{action}'. Expected 'search', 'fetch', or 'research'.")
 
         self.last_evidence = None
+        self.last_research_result = None
 
         # ------------------------------------------------------------------
         # 1. SEARCH
@@ -166,5 +179,70 @@ class WebCapability:
             lines.append(fetch_res.content)
 
             return "\n".join(lines)
+
+        # ------------------------------------------------------------------
+        # 3. RESEARCH
+        # ------------------------------------------------------------------
+        if action == "research":
+            objective = query or str(params.get("objective") or "")
+            if not objective:
+                raise ValueError("Missing objective or query for web research.")
+
+            try:
+                max_iterations = int(params.get("max_iterations") or 3)
+            except (ValueError, TypeError):
+                max_iterations = 3
+
+            try:
+                max_searches = int(params.get("max_searches") or 3)
+            except (ValueError, TypeError):
+                max_searches = 3
+
+            try:
+                max_fetches = int(params.get("max_fetches") or 2)
+            except (ValueError, TypeError):
+                max_fetches = 2
+
+            try:
+                min_evidence = int(params.get("min_evidence") or 1)
+            except (ValueError, TypeError):
+                min_evidence = 1
+
+            max_evidence = max_results if max_results > 5 else 10
+            if "max_evidence" in params:
+                try:
+                    max_evidence = int(params["max_evidence"])
+                except (ValueError, TypeError):
+                    pass
+
+            queries = params.get("queries")
+            if queries is not None and not isinstance(queries, list):
+                queries = None
+
+            coordinator = WebResearchCoordinator(provider=provider)
+            try:
+                research_res = coordinator.research(
+                    objective=objective,
+                    max_iterations=max_iterations,
+                    max_searches=max_searches,
+                    max_fetches=max_fetches,
+                    max_evidence=max_evidence,
+                    min_evidence=min_evidence,
+                    timeout_seconds=timeout_seconds,
+                    queries=queries,
+                    raise_on_error=True,
+                )
+            except Exception:
+                self.last_evidence = None
+                self.last_research_result = None
+                raise
+
+            self.last_evidence = research_res.evidence
+            self.last_research_result = research_res
+            if isinstance(params, dict):
+                params["evidence"] = research_res.evidence
+                params["research_result"] = research_res
+
+            return research_res.output
 
         raise ValueError(f"Unsupported web action: '{action}'.")

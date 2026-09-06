@@ -40,10 +40,12 @@ class Executor:
                 output = tool_function()
 
             data = None
-            if hasattr(tool_function, "last_evidence"):
+            if hasattr(tool_function, "last_research_result") and getattr(tool_function, "last_research_result", None) is not None:
+                data = getattr(tool_function, "last_research_result", None)
+            elif hasattr(tool_function, "last_evidence"):
                 data = getattr(tool_function, "last_evidence", None)
             elif task is not None and hasattr(task, "parameters") and isinstance(task.parameters, dict):
-                data = task.parameters.get("evidence")
+                data = task.parameters.get("research_result") or task.parameters.get("evidence")
 
             return Result(
                 success=True,

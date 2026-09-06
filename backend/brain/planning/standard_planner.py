@@ -87,9 +87,15 @@ class StandardPlanner(DecisionPlannerInterface):
                 plan.steps.append(task)
                 return plan
 
-            if decision.primary_goal == "web_search":
+            if decision.primary_goal in ("web_search", "web_research"):
                 params = self._extract_task_parameters(decision)
-                action_name = "Web Fetch" if params.get("action") == "fetch" else "Web Search"
+                if params.get("action") == "fetch":
+                    action_name = "Web Fetch"
+                elif params.get("action") == "research" or decision.primary_goal == "web_research":
+                    action_name = "Web Research"
+                    params["action"] = "research"
+                else:
+                    action_name = "Web Search"
                 task = Task(
                     id=1,
                     type="web",
@@ -180,7 +186,13 @@ class StandardPlanner(DecisionPlannerInterface):
             )
 
         if capability == CapabilityType.WEB:
-            action_name = "Web Fetch" if params.get("action") == "fetch" else "Web Search"
+            if params.get("action") == "fetch":
+                action_name = "Web Fetch"
+            elif params.get("action") == "research" or decision.primary_goal == "web_research":
+                action_name = "Web Research"
+                params["action"] = "research"
+            else:
+                action_name = "Web Search"
             return Task(
                 id=task_id,
                 type="web",
@@ -216,6 +228,12 @@ class StandardPlanner(DecisionPlannerInterface):
             "key",
             "value",
             "user_id",
+            "objective",
+            "max_iterations",
+            "max_searches",
+            "max_fetches",
+            "min_evidence",
+            "queries",
         ):
             if key in decision.routing_hints:
                 params[key] = decision.routing_hints[key]

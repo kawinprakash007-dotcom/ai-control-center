@@ -355,29 +355,31 @@ def test_history_compatibility_shim(tmp_path):
     test_db = tmp_path / "shim_test.db"
     store = SQLiteMemoryStore(db_path=test_db)
     history_shim.set_store(store)
+    try:
+        history_shim.clear_history()
+        assert len(history_shim.get_history()) == 0
 
-    history_shim.clear_history()
-    assert len(history_shim.get_history()) == 0
+        history_shim.add_message("user", "Hello from shim")
+        history_shim.add_message("assistant", "Hi from shim assistant")
 
-    history_shim.add_message("user", "Hello from shim")
-    history_shim.add_message("assistant", "Hi from shim assistant")
+        hist = history_shim.get_history()
+        assert len(hist) == 2
+        assert hist[0] == {"role": "user", "content": "Hello from shim"}
+        assert hist[1] == {"role": "assistant", "content": "Hi from shim assistant"}
 
-    hist = history_shim.get_history()
-    assert len(hist) == 2
-    assert hist[0] == {"role": "user", "content": "Hello from shim"}
-    assert hist[1] == {"role": "assistant", "content": "Hi from shim assistant"}
+        # Test pop() rollback synchronization (as used in assistant.py on planning error)
+        popped = hist.pop()
+        assert popped == {"role": "assistant", "content": "Hi from shim assistant"}
 
-    # Test pop() rollback synchronization (as used in assistant.py on planning error)
-    popped = hist.pop()
-    assert popped == {"role": "assistant", "content": "Hi from shim assistant"}
+        # Re-reading history reflects the popped item
+        hist2 = history_shim.get_history()
+        assert len(hist2) == 1
+        assert hist2[0] == {"role": "user", "content": "Hello from shim"}
 
-    # Re-reading history reflects the popped item
-    hist2 = history_shim.get_history()
-    assert len(hist2) == 1
-    assert hist2[0] == {"role": "user", "content": "Hello from shim"}
-
-    history_shim.clear_history()
-    assert len(history_shim.get_history()) == 0
+        history_shim.clear_history()
+        assert len(history_shim.get_history()) == 0
+    finally:
+        history_shim.set_store(None)
 
 
 def test_multiple_sessions_remain_independent(temp_store):

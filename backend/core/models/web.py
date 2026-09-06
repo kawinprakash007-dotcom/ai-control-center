@@ -276,3 +276,179 @@ def create_evidence_from_fetch(
         retrieved_at=timestamp,
         metadata=metadata,
     )
+
+
+@dataclass(frozen=True)
+class Citation:
+    """
+    Deterministic citation pointing to verified, source-backed EvidenceItem.
+    Guarantees that no URL is fabricated and provenance is strictly preserved.
+
+    Attributes:
+        index: 1-based sequential citation label (e.g. 1 for [1]).
+        evidence_id: Identifier of the supporting EvidenceItem.
+        url: Exact source URL for user reference.
+        title: Title of the cited source.
+        domain: Normalized domain of the cited source.
+    """
+    index: int
+    evidence_id: str
+    url: str
+    title: str
+    domain: str
+
+    def render_marker(self) -> str:
+        """Render inline marker, e.g. '[1]'."""
+        return f"[{self.index}]"
+
+    def render_reference(self) -> str:
+        """Render reference entry, e.g. '[1] Title\n    https://...'."""
+        return f"[{self.index}] {self.title}\n    {self.url}"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "index": self.index,
+            "evidence_id": self.evidence_id,
+            "url": self.url,
+            "title": self.title,
+            "domain": self.domain,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "Citation":
+        return cls(
+            index=data["index"],
+            evidence_id=data["evidence_id"],
+            url=data["url"],
+            title=data.get("title", ""),
+            domain=data.get("domain", ""),
+        )
+
+
+@dataclass(frozen=True)
+class CitationSet:
+    """
+    Collection of deterministic citations associated with an evidence set.
+    """
+    citations: Tuple[Citation, ...] = field(default_factory=tuple)
+
+    def __len__(self) -> int:
+        return len(self.citations)
+
+    def __iter__(self):
+        return iter(self.citations)
+
+    def __getitem__(self, index: int) -> Citation:
+        return self.citations[index]
+
+    @property
+    def is_empty(self) -> bool:
+        return len(self.citations) == 0
+
+    @classmethod
+    def from_evidence_set(cls, evidence_set: EvidenceSet) -> "CitationSet":
+        """
+        Build deterministic citations from a deduplicated EvidenceSet.
+        Each EvidenceItem receives a 1-based index according to its set order.
+        """
+        citations = [
+            Citation(
+                index=idx,
+                evidence_id=item.id,
+                url=item.url,
+                title=item.title,
+                domain=item.domain,
+            )
+            for idx, item in enumerate(evidence_set.items, start=1)
+        ]
+        return cls(citations=tuple(citations))
+
+    def render_sources_block(self) -> str:
+        """
+        Render formatted sources section for user-facing output.
+        """
+        if self.is_empty:
+            return ""
+        lines = ["Sources:"]
+        for c in self.citations:
+            lines.append(c.render_reference())
+        return "\n".join(lines)
+
+    def get_by_evidence_id(self, evidence_id: str) -> Optional[Citation]:
+        for c in self.citations:
+            if c.evidence_id == evidence_id:
+                return c
+        return None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {"citations": [c.to_dict() for c in self.citations]}
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "CitationSet":
+        citations = [Citation.from_dict(d) for d in data.get("citations", [])]
+        return cls(citations=tuple(citations))
+
+
+@dataclass(frozen=True)
+class ResearchState:
+    """
+    State tracking for a bounded research loop execution.
+
+    Attributes:
+        objective: The research query or goal.
+        iteration: Current loop iteration counter.
+        searches_used: Number of search operations executed.
+        fetches_used: Number of fetch operations executed.
+        evidence_count: Number of unique evidence items collected.
+        completed: Whether the research cycle has concluded.
+        stop_reason: Reason why research concluded (e.g. 'STOP_SUCCESS', 'STOP_LIMIT').
+    """
+    objective: str
+    iteration: int = 0
+    searches_used: int = 0
+    fetches_used: int = 0
+    evidence_count: int = 0
+    completed: bool = False
+    stop_reason: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "objective": self.objective,
+            "iteration": self.iteration,
+            "searches_used": self.searches_used,
+            "fetches_used": self.fetches_used,
+            "evidence_count": self.evidence_count,
+            "completed": self.completed,
+            "stop_reason": self.stop_reason,
+        }
+
+
+@dataclass(frozen=True)
+class ResearchResult:
+    """
+    Structured outcome of a bounded web research loop.
+
+    Attributes:
+        objective: Original research query.
+        evidence: Complete deduplicated EvidenceSet accumulated.
+        citations: CitationSet generated from the evidence.
+        status: Final status ('completed', 'partial', 'failed').
+        output: Synthesized textual response with sources.
+        state: Final ResearchState snapshot.
+    """
+    objective: str
+    evidence: EvidenceSet
+    citations: CitationSet
+    status: str
+    output: str
+    state: Optional[ResearchState] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "objective": self.objective,
+            "evidence": self.evidence.to_dict(),
+            "citations": self.citations.to_dict(),
+            "status": self.status,
+            "output": self.output,
+            "state": self.state.to_dict() if self.state else None,
+        }
