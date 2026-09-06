@@ -39,10 +39,17 @@ class Executor:
             else:
                 output = tool_function()
 
+            data = None
+            if hasattr(tool_function, "last_evidence"):
+                data = getattr(tool_function, "last_evidence", None)
+            elif task is not None and hasattr(task, "parameters") and isinstance(task.parameters, dict):
+                data = task.parameters.get("evidence")
+
             return Result(
                 success=True,
                 message="Task completed.",
-                output=str(output)
+                output=str(output),
+                data=data,
             )
 
         except Exception as e:

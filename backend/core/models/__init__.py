@@ -20,6 +20,12 @@ from core.models.memory import (
 from core.models.web import (
     SearchResult,
     FetchResult,
+    EvidenceItem,
+    EvidenceSet,
+    create_evidence_from_search,
+    create_evidence_from_fetch,
+    normalize_domain,
+    canonicalize_url,
 )
 
 __all__ = [
@@ -40,4 +46,10 @@ __all__ = [
     "MemoryEntry",
     "SearchResult",
     "FetchResult",
+    "EvidenceItem",
+    "EvidenceSet",
+    "create_evidence_from_search",
+    "create_evidence_from_fetch",
+    "normalize_domain",
+    "canonicalize_url",
 ]

@@ -2,18 +2,25 @@ from typing import Optional, Union, Dict, Any
 
 from core.interfaces.web_interface import WebProviderInterface
 from core.models.task import Task
+from core.models.web import (
+    EvidenceSet,
+    create_evidence_from_search,
+    create_evidence_from_fetch,
+)
 
 
 class WebCapability:
     """
     Adapter between AI Control Center's Tool protocol and WebProviderInterface.
     Executes web intelligence tasks: SEARCH and FETCH.
+    Produces structured, source-backed EvidenceSet records for downstream reasoning.
     """
 
     def __init__(self, provider: Optional[WebProviderInterface] = None):
         """
         Initialize WebCapability with an injected or lazily-retrieved WebProvider.
         """
+        self.last_evidence: Optional[EvidenceSet] = None
         if provider is not None:
             self.provider = provider
         else:
@@ -22,6 +29,12 @@ class WebCapability:
                 self.provider = DefaultWebProvider()
             except ImportError:
                 self.provider = None
+
+    def get_evidence(self) -> Optional[EvidenceSet]:
+        """
+        Retrieve the most recently generated evidence set, if any.
+        """
+        return self.last_evidence
 
     def __call__(self, task: Optional[Union[Task, str, Dict[str, Any]]] = None) -> str:
         """
@@ -75,6 +88,8 @@ class WebCapability:
         if action not in ("search", "fetch"):
             raise ValueError(f"Unsupported web action: '{action}'. Expected 'search' or 'fetch'.")
 
+        self.last_evidence = None
+
         # ------------------------------------------------------------------
         # 1. SEARCH
         # ------------------------------------------------------------------
@@ -82,14 +97,30 @@ class WebCapability:
             if not query:
                 raise ValueError("Missing query for web search.")
 
-            results = provider.search(
-                query=query,
-                max_results=max_results,
-                timeout_seconds=timeout_seconds,
-            )
+            try:
+                results = provider.search(
+                    query=query,
+                    max_results=max_results,
+                    timeout_seconds=timeout_seconds,
+                )
+            except Exception:
+                self.last_evidence = None
+                raise
 
             if not results:
+                self.last_evidence = EvidenceSet.from_items([], query=query, max_items=max_results)
+                if isinstance(params, dict):
+                    params["evidence"] = self.last_evidence
                 return f"No web search results found for: '{query}'."
+
+            evidence_items = [create_evidence_from_search(r) for r in results]
+            self.last_evidence = EvidenceSet.from_items(
+                evidence_items,
+                query=query,
+                max_items=max_results,
+            )
+            if isinstance(params, dict):
+                params["evidence"] = self.last_evidence
 
             lines = [f"Web search results for '{query}':\n"]
             for idx, r in enumerate(results, start=1):
@@ -107,10 +138,23 @@ class WebCapability:
             if not url:
                 raise ValueError("Missing URL for web fetch.")
 
-            fetch_res = provider.fetch(
-                url=url,
-                timeout_seconds=timeout_seconds,
+            try:
+                fetch_res = provider.fetch(
+                    url=url,
+                    timeout_seconds=timeout_seconds,
+                )
+            except Exception:
+                self.last_evidence = None
+                raise
+
+            fetch_item = create_evidence_from_fetch(fetch_res)
+            self.last_evidence = EvidenceSet.from_items(
+                [fetch_item],
+                query=url,
+                max_items=1,
             )
+            if isinstance(params, dict):
+                params["evidence"] = self.last_evidence
 
             lines = [
                 f"URL: {fetch_res.url}",
