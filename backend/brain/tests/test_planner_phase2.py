@@ -348,8 +348,8 @@ def test_planner_determinism(planner):
 # ============================================================================
 
 def test_unsupported_capability_handling(planner):
-    """19. Capabilities without execution mappings (WEB, VISION, DEVICE) fail with ValueError."""
-    for unsupported_cap in (CapabilityType.WEB, CapabilityType.VISION, CapabilityType.DEVICE):
+    """19. Capabilities without execution mappings (VISION, DEVICE) fail with ValueError."""
+    for unsupported_cap in (CapabilityType.VISION, CapabilityType.DEVICE):
         dec = make_decision(
             primary_goal="test_unsupported",
             required_capabilities=[unsupported_cap],
@@ -358,6 +358,24 @@ def test_unsupported_capability_handling(planner):
         with pytest.raises(ValueError) as excinfo:
             planner.plan(dec)
         assert "does not yet have a supported execution mapping" in str(excinfo.value)
+
+
+def test_web_capability_planning(planner):
+    """19b. Web capability produces valid single-step web Task."""
+    dec = make_decision(
+        primary_goal="web_search",
+        required_capabilities=[CapabilityType.WEB],
+        execution_mode=ExecutionMode.SINGLE_STEP,
+        routing_hints={"action": "search", "query": "Python 3.14 release"},
+    )
+    plan = planner.plan(dec)
+    assert len(plan.steps) == 1
+    task = plan.steps[0]
+    assert task.type == "web"
+    assert task.tool == "web"
+    assert task.action == "Web Search"
+    assert task.parameters["action"] == "search"
+    assert task.parameters["query"] == "Python 3.14 release"
 
 
 # ============================================================================

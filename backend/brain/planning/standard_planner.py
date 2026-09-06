@@ -87,6 +87,20 @@ class StandardPlanner(DecisionPlannerInterface):
                 plan.steps.append(task)
                 return plan
 
+            if decision.primary_goal == "web_search":
+                params = self._extract_task_parameters(decision)
+                action_name = "Web Fetch" if params.get("action") == "fetch" else "Web Search"
+                task = Task(
+                    id=1,
+                    type="web",
+                    action=action_name,
+                    tool="web",
+                    parameters=params,
+                    status="pending",
+                )
+                plan.steps.append(task)
+                return plan
+
             # Fallback for single-step by capability
             if decision.required_capabilities:
                 task = self._build_task_for_capability(
@@ -165,7 +179,18 @@ class StandardPlanner(DecisionPlannerInterface):
                 status="pending",
             )
 
-        if capability in (CapabilityType.WEB, CapabilityType.VISION, CapabilityType.DEVICE):
+        if capability == CapabilityType.WEB:
+            action_name = "Web Fetch" if params.get("action") == "fetch" else "Web Search"
+            return Task(
+                id=task_id,
+                type="web",
+                action=action_name,
+                tool="web",
+                parameters=params,
+                status="pending",
+            )
+
+        if capability in (CapabilityType.VISION, CapabilityType.DEVICE):
             raise ValueError(
                 f"Capability '{capability.value}' does not yet have a supported execution mapping in Phase 2.3"
             )
@@ -176,6 +201,7 @@ class StandardPlanner(DecisionPlannerInterface):
         params: Dict[str, Any] = {}
         for key in (
             "query",
+            "url",
             "path",
             "tool_hint",
             "max_results",

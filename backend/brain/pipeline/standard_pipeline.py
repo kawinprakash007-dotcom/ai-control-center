@@ -8,6 +8,7 @@ from core.interfaces.execution_engine_interface import ExecutionEngineInterface
 from core.interfaces.verification_interface import VerificationInterface
 from core.interfaces.response_composer_interface import ResponseComposerInterface
 from core.interfaces.memory_interface import MemoryServiceInterface
+from core.interfaces.web_interface import WebProviderInterface
 from core.models.pipeline import PipelineResult
 from core.models.memory import MessageRole
 
@@ -36,6 +37,7 @@ class StandardPipeline(PipelineInterface):
         verifier: Optional[VerificationInterface] = None,
         composer: Optional[ResponseComposerInterface] = None,
         memory_service: Optional[MemoryServiceInterface] = None,
+        web_provider: Optional[WebProviderInterface] = None,
     ):
         self.understanding = (
             understanding
@@ -72,6 +74,7 @@ class StandardPipeline(PipelineInterface):
             if memory_service is not None
             else SQLiteMemoryStore()
         )
+        self.web_provider = web_provider
 
     def process(self, input_data: Any) -> PipelineResult:
         """
@@ -108,6 +111,11 @@ class StandardPipeline(PipelineInterface):
                         params["memory_service"] = self.memory_service
                     if "user_id" not in params:
                         params["user_id"] = "default_user"
+                    step.parameters = params
+                elif getattr(step, "type", None) == "web" or getattr(step, "tool", None) == "web":
+                    params = dict(step.parameters) if step.parameters else {}
+                    if "web_provider" not in params and self.web_provider is not None:
+                        params["web_provider"] = self.web_provider
                     step.parameters = params
 
 
