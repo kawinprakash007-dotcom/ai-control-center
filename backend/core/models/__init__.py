@@ -41,6 +41,7 @@ from core.models.research import (
     ResearchGap,
     Contradiction,
 )
+from core.models.tool_call import ToolCall
 
 __all__ = [
     "Request",
@@ -78,4 +79,5 @@ __all__ = [
     "EvidenceAssessment",
     "ResearchGap",
     "Contradiction",
+    "ToolCall",
 ]
