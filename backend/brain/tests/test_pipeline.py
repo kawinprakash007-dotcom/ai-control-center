@@ -386,20 +386,32 @@ def test_response_composer_exception_propagates():
 # ============================================================================
 
 def test_empty_input_pipeline():
-    stub_engine = SpyExecutionEngine(results=[Result(success=True, message="Chat", output="Ignored")])
-    pipeline = StandardPipeline(execution_engine=stub_engine)
+    router = StubRouter()
+    exec_engine = StandardExecutionEngine(router=router)
+    pipeline = StandardPipeline(execution_engine=exec_engine)
 
     res = pipeline.process("")
     assert res.decision.primary_goal == "prompt_user_input"
+    assert res.plan.steps == []
+    assert len(router.routed_tasks) == 0
+    assert res.results == []
+    assert res.verification.verified is True
+    assert res.verification.reason == "Plan completed with no tasks."
     assert res.response == "Please provide an instruction or question."
 
 
 def test_ambiguous_input_pipeline():
-    stub_engine = SpyExecutionEngine(results=[Result(success=True, message="Chat", output="Ignored")])
-    pipeline = StandardPipeline(execution_engine=stub_engine)
+    router = StubRouter()
+    exec_engine = StandardExecutionEngine(router=router)
+    pipeline = StandardPipeline(execution_engine=exec_engine)
 
     res = pipeline.process("???")
     assert res.decision.primary_goal == "clarify_request"
+    assert res.plan.steps == []
+    assert len(router.routed_tasks) == 0
+    assert res.results == []
+    assert res.verification.verified is True
+    assert res.verification.reason == "Plan completed with no tasks."
     assert "Please clarify your request" in res.response
 
 

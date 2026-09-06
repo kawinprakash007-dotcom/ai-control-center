@@ -108,20 +108,20 @@ def test_direct_chat_planning(planner):
 # ============================================================================
 
 def test_empty_input_planning(planner):
-    """5. Empty-input decision produces a Prompt User Input task."""
+    """5. Empty-input decision produces zero steps (non-executable control-flow)."""
     dec = make_decision(
         primary_goal="prompt_user_input",
         required_capabilities=[CapabilityType.CHAT],
         execution_mode=ExecutionMode.DIRECT,
+        confidence=1.0,
         routing_hints={"is_empty": True},
     )
     plan = planner.plan(dec)
-    assert len(plan.steps) == 1
-    task = plan.steps[0]
-    assert task.id == 1
-    assert task.type == "chat"
-    assert task.action == "Prompt User Input"
-    assert task.tool == "chat"
+    assert plan.steps == []
+    assert len(plan.steps) == 0
+    assert plan.goal == "prompt_user_input"
+    assert plan.confidence == 1.0
+    assert plan.status == "pending"
 
 
 # ============================================================================
@@ -129,20 +129,33 @@ def test_empty_input_planning(planner):
 # ============================================================================
 
 def test_clarification_planning(planner):
-    """6. Clarification decision produces a Clarify Request task with ambiguity reason."""
+    """6. Clarification decision produces zero steps (non-executable control-flow)."""
     dec = make_decision(
         primary_goal="clarify_request",
         required_capabilities=[CapabilityType.CHAT],
         execution_mode=ExecutionMode.DIRECT,
+        confidence=0.95,
         routing_hints={"ambiguity_reason": "Input contains only punctuation"},
     )
     plan = planner.plan(dec)
-    assert len(plan.steps) == 1
-    task = plan.steps[0]
-    assert task.id == 1
-    assert task.type == "chat"
-    assert task.action == "Clarify Request"
-    assert task.parameters["ambiguity_reason"] == "Input contains only punctuation"
+    assert plan.steps == []
+    assert len(plan.steps) == 0
+    assert plan.goal == "clarify_request"
+    assert plan.confidence == 0.95
+    assert plan.status == "pending"
+
+
+def test_control_flow_decisions_do_not_create_chat_tasks(planner):
+    """Verify neither prompt_user_input nor clarify_request creates any chat task."""
+    for goal in ("prompt_user_input", "clarify_request"):
+        dec = make_decision(
+            primary_goal=goal,
+            required_capabilities=[CapabilityType.CHAT],
+            execution_mode=ExecutionMode.DIRECT,
+        )
+        plan = planner.plan(dec)
+        assert len(plan.steps) == 0
+        assert not any(t.type == "chat" or t.tool == "chat" for t in plan.steps)
 
 
 # ============================================================================

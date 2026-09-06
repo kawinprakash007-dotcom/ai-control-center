@@ -27,13 +27,10 @@ class StandardPlanner(DecisionPlannerInterface):
 
         # 1. DIRECT Execution Mode
         if decision.execution_mode == ExecutionMode.DIRECT:
-            if decision.primary_goal == "prompt_user_input":
-                action = "Prompt User Input"
-            elif decision.primary_goal == "clarify_request":
-                action = "Clarify Request"
-            else:
-                action = "Respond to User"
+            if decision.primary_goal in ("prompt_user_input", "clarify_request"):
+                return plan
 
+            action = "Respond to User"
             params = self._extract_task_parameters(decision)
             task = Task(
                 id=1,
