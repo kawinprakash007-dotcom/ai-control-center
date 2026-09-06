@@ -18,7 +18,9 @@ from core.interfaces.reasoning_interface import (
     ActionProposalValidatorInterface,
 )
 from core.models.recovery import RecoveryContext, RecoveryAction
+from core.interfaces.model_router_interface import ModelRouterInterface
 from reasoning.validator import ActionProposalValidator
+from routing.requirement_mapper import derive_requirements_from_request
 
 
 class ReasoningLoopTermination(Exception):
@@ -39,15 +41,20 @@ class ReasoningEngine:
        and consecutive no-progress signatures.
     4. Anti-loop protection: detects identical (scene, proposal, failure) cycles.
     5. Preserves user goal throughout.
+    6. Seamlessly integrates with ModelRouter for dynamic provider selection.
     """
 
     def __init__(
         self,
-        provider: ReasoningProviderInterface,
+        provider: Optional[ReasoningProviderInterface] = None,
+        router: Optional[ModelRouterInterface] = None,
         validator: Optional[ActionProposalValidatorInterface] = None,
         limits: Optional[ReasoningLimits] = None,
     ):
+        if provider is None and router is None:
+            raise ValueError("ReasoningEngine requires either a provider or a router instance.")
         self.provider = provider
+        self.router = router
         self.validator = validator or ActionProposalValidator()
         self.limits = limits or ReasoningLimits()
 
@@ -86,8 +93,35 @@ class ReasoningEngine:
             turn_index=turn_index,
         )
 
+        # 1. Resolve Provider (via injected provider or dynamic router)
+        active_provider = self.provider
+        if self.router is not None:
+            requirements = derive_requirements_from_request(req)
+            routing_res = self.router.route(requirements)
+            if not routing_res.success:
+                return (
+                    ReasoningResponse(
+                        turn_id=f"route_fail_{uuid.uuid4().hex[:8]}",
+                        outcome=ReasoningOutcome.ABORT,
+                        abort_reason=f"Model Router failed to select provider: {routing_res.error_reason}",
+                        confidence=0.0,
+                    ),
+                    None,
+                )
+            active_provider = self.router.get_provider(routing_res.provider_id)
+            if active_provider is None:
+                return (
+                    ReasoningResponse(
+                        turn_id=f"route_err_{uuid.uuid4().hex[:8]}",
+                        outcome=ReasoningOutcome.ABORT,
+                        abort_reason=f"Model Router selected provider '{routing_res.provider_id}' but provider instance was not found.",
+                        confidence=0.0,
+                    ),
+                    None,
+                )
+
         try:
-            resp = self.provider.reason(req)
+            resp = active_provider.reason(req)
         except Exception as e:
             # Malformed/crashed provider fails closed to ABORT
             resp = ReasoningResponse(

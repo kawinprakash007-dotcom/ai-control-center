@@ -88,6 +88,15 @@ from core.models.reasoning import (
     ProposalValidationResult,
     ReasoningLimits,
 )
+from core.models.model_router import (
+    LocalityRequirement,
+    CostClass,
+    LatencyClass,
+    PrivacyClass,
+    ModelDescriptor,
+    ModelRequirements,
+    RoutingResult,
+)
 
 __all__ = [
     "Request",
@@ -162,4 +171,11 @@ __all__ = [
     "ReasoningResponse",
     "ProposalValidationResult",
     "ReasoningLimits",
+    "LocalityRequirement",
+    "CostClass",
+    "LatencyClass",
+    "PrivacyClass",
+    "ModelDescriptor",
+    "ModelRequirements",
+    "RoutingResult",
 ]

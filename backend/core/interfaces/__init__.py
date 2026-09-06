@@ -34,6 +34,10 @@ from core.interfaces.reasoning_interface import (
     ReasoningProviderInterface,
     ActionProposalValidatorInterface,
 )
+from core.interfaces.model_router_interface import (
+    ModelProviderRegistryInterface,
+    ModelRouterInterface,
+)
 
 __all__ = [
     "BrainInterface",
@@ -56,4 +60,6 @@ __all__ = [
     "TargetGrounderInterface",
     "ReasoningProviderInterface",
     "ActionProposalValidatorInterface",
+    "ModelProviderRegistryInterface",
+    "ModelRouterInterface",
 ]
