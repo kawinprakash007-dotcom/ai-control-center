@@ -51,6 +51,12 @@ from core.interfaces.goal_interface import (
     GoalSchedulerInterface,
     AutonomousGoalManagerInterface,
 )
+from core.interfaces.world_interface import (
+    ObservationSourceInterface,
+    WorldStateStoreInterface,
+    ConflictResolverInterface,
+    WorldStateUpdaterInterface,
+)
 
 __all__ = [
     "BrainInterface",
@@ -84,4 +90,8 @@ __all__ = [
     "GoalExecutionEngineInterface",
     "GoalSchedulerInterface",
     "AutonomousGoalManagerInterface",
+    "ObservationSourceInterface",
+    "WorldStateStoreInterface",
+    "ConflictResolverInterface",
+    "WorldStateUpdaterInterface",
 ]

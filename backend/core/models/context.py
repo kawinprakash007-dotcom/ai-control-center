@@ -36,6 +36,7 @@ class ContextSource(str, Enum):
     VERIFICATION = "verification"
     RECOVERY = "recovery"
     CAPABILITY_STATE = "capability_state"
+    WORLD_STATE = "world_state"
 
 
 class ContextPriority(IntEnum):
@@ -245,6 +246,7 @@ class CognitiveState:
     memory_items: Tuple[Any, ...] = field(default_factory=tuple)
     knowledge_items: Tuple[Any, ...] = field(default_factory=tuple)
     web_evidence: Tuple[Any, ...] = field(default_factory=tuple)
+    world_conditions: Tuple[Any, ...] = field(default_factory=tuple)
     research_state: Optional[Any] = None
     available_capabilities: Tuple[str, ...] = field(default_factory=tuple)
     attention_focus: AttentionFocus = AttentionFocus.GOAL
@@ -267,6 +269,7 @@ class CognitiveState:
             "memory_items_count": len(self.memory_items),
             "knowledge_items_count": len(self.knowledge_items),
             "web_evidence_count": len(self.web_evidence),
+            "world_conditions_count": len(self.world_conditions),
             "has_research_state": self.research_state is not None,
             "available_capabilities": list(self.available_capabilities),
             "attention_focus": self.attention_focus.value,
