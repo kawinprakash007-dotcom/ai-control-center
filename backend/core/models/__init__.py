@@ -10,7 +10,17 @@ from core.models.goal import Goal
 from core.models.plan import Plan
 from core.models.task import Task
 from core.models.result import Result
-from core.models.context import Context
+from core.models.context import (
+    Context,
+    ContextSource,
+    ContextPriority,
+    SensitivityLevel,
+    AttentionFocus,
+    ContextItem,
+    ContextBudget,
+    ContextSelection,
+    CognitiveState,
+)
 from core.models.reflection import ReflectionDecision
 from core.models.memory import (
     MessageRole,
@@ -110,6 +120,14 @@ __all__ = [
     "Task",
     "Result",
     "Context",
+    "ContextSource",
+    "ContextPriority",
+    "SensitivityLevel",
+    "AttentionFocus",
+    "ContextItem",
+    "ContextBudget",
+    "ContextSelection",
+    "CognitiveState",
     "ReflectionDecision",
     "MessageRole",
     "ChatMessage",

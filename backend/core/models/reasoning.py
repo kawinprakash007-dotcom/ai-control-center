@@ -6,6 +6,7 @@ from core.models.tool_call import ToolCall
 from core.models.verification import VerificationResult
 from core.models.recovery import RecoveryContext
 from core.models.perception import VisualScene, GroundedTarget
+from core.models.context import ContextSelection, AttentionFocus
 
 
 class ReasoningOutcome(str, Enum):
@@ -115,6 +116,8 @@ class ReasoningRequest:
     recovery_context: Optional[RecoveryContext] = None
     available_capabilities: Tuple[str, ...] = field(default_factory=tuple)
     turn_index: int = 1
+    context_selection: Optional[ContextSelection] = None
+    attention_focus: Optional[AttentionFocus] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 

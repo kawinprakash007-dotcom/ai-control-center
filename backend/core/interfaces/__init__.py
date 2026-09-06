@@ -38,6 +38,7 @@ from core.interfaces.model_router_interface import (
     ModelProviderRegistryInterface,
     ModelRouterInterface,
 )
+from core.interfaces.context_interface import ContextManagerInterface
 
 __all__ = [
     "BrainInterface",
@@ -62,4 +63,5 @@ __all__ = [
     "ActionProposalValidatorInterface",
     "ModelProviderRegistryInterface",
     "ModelRouterInterface",
+    "ContextManagerInterface",
 ]

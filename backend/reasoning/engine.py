@@ -19,6 +19,8 @@ from core.interfaces.reasoning_interface import (
 )
 from core.models.recovery import RecoveryContext, RecoveryAction
 from core.interfaces.model_router_interface import ModelRouterInterface
+from core.interfaces.context_interface import ContextManagerInterface
+from core.models.context import CognitiveState, ContextSelection, AttentionFocus
 from reasoning.validator import ActionProposalValidator
 from routing.requirement_mapper import derive_requirements_from_request
 
@@ -50,6 +52,7 @@ class ReasoningEngine:
         router: Optional[ModelRouterInterface] = None,
         validator: Optional[ActionProposalValidatorInterface] = None,
         limits: Optional[ReasoningLimits] = None,
+        context_manager: Optional[ContextManagerInterface] = None,
     ):
         if provider is None and router is None:
             raise ValueError("ReasoningEngine requires either a provider or a router instance.")
@@ -57,6 +60,7 @@ class ReasoningEngine:
         self.router = router
         self.validator = validator or ActionProposalValidator()
         self.limits = limits or ReasoningLimits()
+        self.context_manager = context_manager
 
     def run_turn(
         self,
@@ -71,14 +75,33 @@ class ReasoningEngine:
         verification_result: Optional[VerificationResult] = None,
         recovery_context: Optional[RecoveryContext] = None,
         turn_index: int = 1,
+        cognitive_state: Optional[CognitiveState] = None,
+        context_selection: Optional[ContextSelection] = None,
     ) -> Tuple[ReasoningResponse, Optional[ProposalValidationResult]]:
         """
         Execute a single reasoning turn:
-        1. Build bounded ReasoningRequest.
-        2. Call model-neutral ReasoningProvider.
-        3. Validate response and any ActionProposal deterministically.
-        4. Return structured response and validation result.
+        1. Optionally build/attach bounded ContextSelection via ContextManager.
+        2. Build bounded ReasoningRequest.
+        3. Call model-neutral ReasoningProvider.
+        4. Validate response and any ActionProposal deterministically.
+        5. Return structured response and validation result.
         """
+        resolved_context = context_selection
+        if resolved_context is None and self.context_manager is not None:
+            cs = cognitive_state
+            if cs is None:
+                cs = CognitiveState(
+                    original_goal=goal,
+                    current_task=task_description,
+                    recent_execution_outcomes=execution_history,
+                    verification_state=verification_result,
+                    recovery_state=recovery_context,
+                    visual_scene=visual_scene,
+                    grounded_candidates=grounded_candidates,
+                    memory_items=memory_context,
+                )
+            resolved_context = self.context_manager.build_context(cs)
+
         req = ReasoningRequest(
             goal=goal,
             task_description=task_description,
@@ -91,6 +114,8 @@ class ReasoningEngine:
             verification_result=verification_result,
             recovery_context=recovery_context,
             turn_index=turn_index,
+            context_selection=resolved_context,
+            attention_focus=resolved_context.attention_focus if resolved_context else None,
         )
 
         # 1. Resolve Provider (via injected provider or dynamic router)

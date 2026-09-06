@@ -39,6 +39,15 @@ def derive_requirements_from_request(req: ReasoningRequest) -> ModelRequirements
         locality = LocalityRequirement.LOCAL_ONLY
         privacy = PrivacyClass.STRICT_LOCAL
 
+    # 4. ContextSelection integration (Phase 3.9)
+    if req.context_selection is not None:
+        if req.context_selection.has_sensitive_content():
+            locality = LocalityRequirement.LOCAL_ONLY
+            privacy = PrivacyClass.STRICT_LOCAL
+        if any(item.source.value == "visual_scene" for item in req.context_selection.selected_items):
+            required_caps.append(ModelCapabilityType.VISION)
+            structured_out = True
+
     # Deduplicate required caps preserving order
     deduped_required: List[ModelCapabilityType] = []
     for c in required_caps:
