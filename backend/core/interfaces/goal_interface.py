@@ -170,6 +170,13 @@ class AutonomousGoalManagerInterface(ABC):
     """
 
     @abstractmethod
+    def create_goal(self, goal: Goal) -> Goal:
+        """
+        Create and persist a new goal under management authority.
+        """
+        pass
+
+    @abstractmethod
     def schedule_once(self) -> Optional[Any]:
         """
         Evaluate candidate goals and execute at most one bounded quantum for the selected goal.

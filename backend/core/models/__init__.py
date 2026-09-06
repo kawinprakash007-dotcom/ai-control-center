@@ -163,6 +163,20 @@ from core.models.world_state import (
     FreshnessConfig,
     ConflictPolicy,
 )
+from core.models.autonomy import (
+    EventSource,
+    EventPriority,
+    EventCategory,
+    AutonomyDecisionType,
+    EventProvenance,
+    Event,
+    EventClassification,
+    EventRelevance,
+    TriggerCondition,
+    EventTrigger,
+    AutonomyDecision,
+    EventSubscription,
+)
 
 __all__ = [
     "Request",
@@ -298,4 +312,16 @@ __all__ = [
     "WorldStateUpdateResult",
     "FreshnessConfig",
     "ConflictPolicy",
+    "EventSource",
+    "EventPriority",
+    "EventCategory",
+    "AutonomyDecisionType",
+    "EventProvenance",
+    "Event",
+    "EventClassification",
+    "EventRelevance",
+    "TriggerCondition",
+    "EventTrigger",
+    "AutonomyDecision",
+    "EventSubscription",
 ]

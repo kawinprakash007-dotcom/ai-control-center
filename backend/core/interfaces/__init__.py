@@ -57,6 +57,11 @@ from core.interfaces.world_interface import (
     ConflictResolverInterface,
     WorldStateUpdaterInterface,
 )
+from core.interfaces.autonomy_interface import (
+    EventClassifierInterface,
+    RelevanceEngineInterface,
+    EventDrivenAutonomyInterface,
+)
 
 __all__ = [
     "BrainInterface",
@@ -94,4 +99,7 @@ __all__ = [
     "WorldStateStoreInterface",
     "ConflictResolverInterface",
     "WorldStateUpdaterInterface",
+    "EventClassifierInterface",
+    "RelevanceEngineInterface",
+    "EventDrivenAutonomyInterface",
 ]

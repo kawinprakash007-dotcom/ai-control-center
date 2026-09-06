@@ -255,6 +255,25 @@ class AutonomousGoalManager(AutonomousGoalManagerInterface):
     # GOAL LIFECYCLE CONTROLS
     # ------------------------------------------------------------------------
 
+    def create_goal(self, goal: Goal) -> Goal:
+        """
+        Create and persist a new goal under management authority.
+        Emits CognitiveEventType.GOAL_CREATED with structured metadata.
+        """
+        with self._lock:
+            created = self.store.create_goal(goal)
+            self._publish_event(
+                event_type=CognitiveEventType.GOAL_CREATED,
+                goal_id=created.goal_id,
+                summary=f"Goal '{created.goal_id}' created under manager authority.",
+                payload={
+                    "original_goal": created.original_goal,
+                    "priority": created.priority.value if hasattr(created.priority, "value") else str(created.priority),
+                    **(created.metadata or {}),
+                },
+            )
+            return created
+
     def pause_goal(self, goal_id: str, reason: str = "") -> Goal:
         with self._lock:
             if self._state.active_goal_id == goal_id:
