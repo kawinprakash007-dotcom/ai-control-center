@@ -38,6 +38,7 @@ class WebResearchCoordinator:
         self,
         provider: Optional[WebProviderInterface] = None,
         synthesizer: Optional[Callable[[str, EvidenceSet, CitationSet], str]] = None,
+        reasoner: Optional[Any] = None,
     ):
         """
         Initialize the research coordinator.
@@ -45,6 +46,7 @@ class WebResearchCoordinator:
         Args:
             provider: WebProviderInterface instance. If omitted, lazily imports DefaultWebProvider.
             synthesizer: Optional synthesis function for testing or future LLM integration.
+            reasoner: Optional ResearchReasonerInterface instance for autonomous reasoning.
         """
         if provider is not None:
             self.provider = provider
@@ -56,6 +58,7 @@ class WebResearchCoordinator:
                 self.provider = None
 
         self.synthesizer = synthesizer
+        self.reasoner = reasoner
         self.last_error: Optional[Exception] = None
 
     def generate_query_facets(self, objective: str) -> List[str]:
@@ -180,6 +183,26 @@ class WebResearchCoordinator:
         effective_max_fetches = max(0, min(max_fetches, 5))
         effective_max_evidence = max(1, min(max_evidence, 50))
         effective_min_evidence = max(1, min_evidence)
+
+        if self.reasoner is not None:
+            from web.research_agent import ResearchAgent
+            from core.models.research import ResearchLimits
+            agent = ResearchAgent(
+                provider=self.provider,
+                reasoner=self.reasoner,
+                synthesizer=self.synthesizer,
+            )
+            limits = ResearchLimits(
+                max_iterations=effective_max_iterations,
+                max_searches=effective_max_searches,
+                max_fetches=effective_max_fetches,
+                max_evidence=effective_max_evidence,
+                min_evidence=effective_min_evidence,
+                timeout_seconds=timeout_seconds,
+            )
+            res = agent.run(clean_objective, limits=limits, raise_on_error=raise_on_error)
+            self.last_error = agent.last_error
+            return res
 
         # Decompose query facets or use provided queries
         if queries and len(queries) > 0:

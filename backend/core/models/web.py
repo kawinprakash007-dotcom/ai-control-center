@@ -402,6 +402,11 @@ class ResearchState:
         evidence_count: Number of unique evidence items collected.
         completed: Whether the research cycle has concluded.
         stop_reason: Reason why research concluded (e.g. 'STOP_SUCCESS', 'STOP_LIMIT').
+        evidence: Tuple of accumulated EvidenceItem instances.
+        observations: Tuple of ResearchObservation instances from past actions.
+        last_action: Most recent AgentAction evaluated or executed.
+        last_error: Most recent error message encountered, if any.
+        status: High-level status ('in_progress', 'completed', 'partial', 'failed').
     """
     objective: str
     iteration: int = 0
@@ -410,6 +415,11 @@ class ResearchState:
     evidence_count: int = 0
     completed: bool = False
     stop_reason: str = ""
+    evidence: Tuple[EvidenceItem, ...] = field(default_factory=tuple)
+    observations: Tuple[Any, ...] = field(default_factory=tuple)
+    last_action: Optional[Any] = None
+    last_error: Optional[str] = None
+    status: str = "in_progress"
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -420,6 +430,18 @@ class ResearchState:
             "evidence_count": self.evidence_count,
             "completed": self.completed,
             "stop_reason": self.stop_reason,
+            "status": self.status,
+            "last_error": self.last_error,
+            "evidence": [item.to_dict() for item in self.evidence],
+            "observations": [
+                obs.to_dict() if hasattr(obs, "to_dict") else obs
+                for obs in self.observations
+            ],
+            "last_action": (
+                self.last_action.to_dict()
+                if hasattr(self.last_action, "to_dict")
+                else (self.last_action if self.last_action else None)
+            ),
         }
 
 
@@ -452,3 +474,38 @@ class ResearchResult:
             "output": self.output,
             "state": self.state.to_dict() if self.state else None,
         }
+
+
+def validate_citation_references(
+    citations: CitationSet,
+    evidence: EvidenceSet,
+) -> Tuple[bool, List[str]]:
+    """
+    Deterministically validate that all citations in CitationSet reference
+    genuine EvidenceItem instances in the supplied EvidenceSet.
+
+    Verifies:
+    1. Every citation.evidence_id exists in the EvidenceSet.
+    2. Every citation.url matches the corresponding EvidenceItem.url.
+    3. No unknown or fabricated citation references exist.
+
+    Returns:
+        (is_valid, list_of_error_messages)
+    """
+    errors: List[str] = []
+    evidence_by_id = {item.id: item for item in evidence.items}
+
+    for c in citations.citations:
+        if c.evidence_id not in evidence_by_id:
+            errors.append(
+                f"Citation [{c.index}] references non-existent evidence_id '{c.evidence_id}'."
+            )
+            continue
+
+        item = evidence_by_id[c.evidence_id]
+        if c.url != item.url:
+            errors.append(
+                f"Citation [{c.index}] URL mismatch: citation has '{c.url}' but evidence has '{item.url}'."
+            )
+
+    return len(errors) == 0, errors

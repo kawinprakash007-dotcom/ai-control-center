@@ -30,6 +30,13 @@ from core.models.web import (
     CitationSet,
     ResearchState,
     ResearchResult,
+    validate_citation_references,
+)
+from core.models.research import (
+    AgentActionType,
+    AgentAction,
+    ResearchObservation,
+    ResearchLimits,
 )
 
 __all__ = [
@@ -60,4 +67,9 @@ __all__ = [
     "CitationSet",
     "ResearchState",
     "ResearchResult",
+    "validate_citation_references",
+    "AgentActionType",
+    "AgentAction",
+    "ResearchObservation",
+    "ResearchLimits",
 ]

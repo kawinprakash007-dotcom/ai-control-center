@@ -15,6 +15,10 @@ from core.interfaces.web_interface import (
     WebProviderInterface,
     WebProviderError,
 )
+from core.interfaces.research_interface import (
+    ResearchReasonerInterface,
+    ResearchSynthesizerInterface,
+)
 
 __all__ = [
     "BrainInterface",
@@ -26,4 +30,6 @@ __all__ = [
     "DecisionEngineInterface",
     "WebProviderInterface",
     "WebProviderError",
+    "ResearchReasonerInterface",
+    "ResearchSynthesizerInterface",
 ]

@@ -9,6 +9,8 @@ from core.models.web import (
     create_evidence_from_fetch,
 )
 from web.research_coordinator import WebResearchCoordinator
+from web.research_agent import ResearchAgent
+from core.models.research import ResearchLimits
 
 
 class WebCapability:
@@ -219,23 +221,54 @@ class WebCapability:
             if queries is not None and not isinstance(queries, list):
                 queries = None
 
-            coordinator = WebResearchCoordinator(provider=provider)
-            try:
-                research_res = coordinator.research(
-                    objective=objective,
+            reasoner = params.get("reasoner")
+            synthesizer = params.get("synthesizer")
+
+            if reasoner is not None:
+                agent = ResearchAgent(
+                    provider=provider,
+                    reasoner=reasoner,
+                    synthesizer=synthesizer,
+                )
+                limits = ResearchLimits(
                     max_iterations=max_iterations,
                     max_searches=max_searches,
                     max_fetches=max_fetches,
                     max_evidence=max_evidence,
                     min_evidence=min_evidence,
                     timeout_seconds=timeout_seconds,
-                    queries=queries,
-                    raise_on_error=True,
                 )
-            except Exception:
-                self.last_evidence = None
-                self.last_research_result = None
-                raise
+                try:
+                    research_res = agent.run(
+                        objective=objective,
+                        limits=limits,
+                        raise_on_error=True,
+                    )
+                except Exception:
+                    self.last_evidence = None
+                    self.last_research_result = None
+                    raise
+            else:
+                coordinator = WebResearchCoordinator(
+                    provider=provider,
+                    synthesizer=synthesizer,
+                )
+                try:
+                    research_res = coordinator.research(
+                        objective=objective,
+                        max_iterations=max_iterations,
+                        max_searches=max_searches,
+                        max_fetches=max_fetches,
+                        max_evidence=max_evidence,
+                        min_evidence=min_evidence,
+                        timeout_seconds=timeout_seconds,
+                        queries=queries,
+                        raise_on_error=True,
+                    )
+                except Exception:
+                    self.last_evidence = None
+                    self.last_research_result = None
+                    raise
 
             self.last_evidence = research_res.evidence
             self.last_research_result = research_res
