@@ -62,6 +62,12 @@ from core.interfaces.autonomy_interface import (
     RelevanceEngineInterface,
     EventDrivenAutonomyInterface,
 )
+from core.interfaces.anticipation_interface import (
+    EvidenceEvaluatorInterface,
+    InvalidationEngineInterface,
+    AnticipatoryAnalyzerInterface,
+    AnticipatoryPlanningCoordinatorInterface,
+)
 
 __all__ = [
     "BrainInterface",
@@ -102,4 +108,8 @@ __all__ = [
     "EventClassifierInterface",
     "RelevanceEngineInterface",
     "EventDrivenAutonomyInterface",
+    "EvidenceEvaluatorInterface",
+    "InvalidationEngineInterface",
+    "AnticipatoryAnalyzerInterface",
+    "AnticipatoryPlanningCoordinatorInterface",
 ]

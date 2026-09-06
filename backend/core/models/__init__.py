@@ -177,6 +177,17 @@ from core.models.autonomy import (
     AutonomyDecision,
     EventSubscription,
 )
+from core.models.anticipation import (
+    TimeHorizon,
+    AnticipationStatus,
+    FutureConditionType,
+    EvidenceSourceType,
+    AnticipatoryDecisionType,
+    EvidenceItem,
+    AnticipationProvenance,
+    Anticipation,
+    AnticipatoryDecision,
+)
 
 __all__ = [
     "Request",
@@ -324,4 +335,13 @@ __all__ = [
     "EventTrigger",
     "AutonomyDecision",
     "EventSubscription",
+    "TimeHorizon",
+    "AnticipationStatus",
+    "FutureConditionType",
+    "EvidenceSourceType",
+    "AnticipatoryDecisionType",
+    "EvidenceItem",
+    "AnticipationProvenance",
+    "Anticipation",
+    "AnticipatoryDecision",
 ]
