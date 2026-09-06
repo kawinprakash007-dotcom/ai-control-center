@@ -136,6 +136,15 @@ from core.models.replay import (
     ComparisonResult,
     ReplayResult,
 )
+from core.models.goal_management import (
+    GoalPriority,
+    DeadlineStatus,
+    GoalFreshnessStatus,
+    SchedulerConfig,
+    SchedulingDecision,
+    GoalManagementState,
+    QuantumResult,
+)
 
 __all__ = [
     "Request",
@@ -248,4 +257,11 @@ __all__ = [
     "GoalConstraints",
     "GoalCompletionCriteria",
     "GoalProgress",
+    "GoalPriority",
+    "DeadlineStatus",
+    "GoalFreshnessStatus",
+    "SchedulerConfig",
+    "SchedulingDecision",
+    "GoalManagementState",
+    "QuantumResult",
 ]

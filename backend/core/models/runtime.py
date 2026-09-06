@@ -97,6 +97,15 @@ class CognitiveEventType(str, Enum):
     GOAL_FAILED = "GOAL_FAILED"
     GOAL_ABORTED = "GOAL_ABORTED"
 
+    # Goal management & scheduling events (Phase 4.3)
+    GOAL_SELECTED = "GOAL_SELECTED"
+    GOAL_DESELECTED = "GOAL_DESELECTED"
+    GOAL_PRIORITY_CHANGED = "GOAL_PRIORITY_CHANGED"
+    GOAL_DEADLINE_CHANGED = "GOAL_DEADLINE_CHANGED"
+    GOAL_SCHEDULING_SKIPPED = "GOAL_SCHEDULING_SKIPPED"
+    GOAL_STALE = "GOAL_STALE"
+    GOAL_CANCELLED = "GOAL_CANCELLED"
+
 
 # Sensitive keys that must be redacted from event metadata
 _SENSITIVE_KEYS = {

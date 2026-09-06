@@ -48,6 +48,8 @@ from core.interfaces.goal_interface import (
     GoalDecomposerInterface,
     GoalStoreInterface,
     GoalExecutionEngineInterface,
+    GoalSchedulerInterface,
+    AutonomousGoalManagerInterface,
 )
 
 __all__ = [
@@ -80,4 +82,6 @@ __all__ = [
     "GoalDecomposerInterface",
     "GoalStoreInterface",
     "GoalExecutionEngineInterface",
+    "GoalSchedulerInterface",
+    "AutonomousGoalManagerInterface",
 ]

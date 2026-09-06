@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+from core.models.goal_management import GoalPriority
+
 
 class GoalStatus(str, Enum):
     """
@@ -133,7 +135,7 @@ class Goal:
 
     # Legacy Phase 1 compatibility attributes
     goal: str = ""
-    priority: str = "normal"
+    priority: Union[GoalPriority, str] = GoalPriority.NORMAL
     confidence: float = 1.0
     reason: str = ""
     query: str = ""
@@ -154,6 +156,10 @@ class Goal:
                 super().__setattr__("status", GoalStatus(self.status.lower()))
             except ValueError:
                 super().__setattr__("status", GoalStatus.CREATED)
+
+        # Normalize priority to GoalPriority enum
+        if isinstance(self.priority, str) and not isinstance(self.priority, GoalPriority):
+            super().__setattr__("priority", GoalPriority.from_str(self.priority))
 
         super().__setattr__("_initialized", True)
 
