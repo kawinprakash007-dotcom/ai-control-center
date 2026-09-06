@@ -30,6 +30,10 @@ from core.interfaces.perception_interface import (
     PerceptionEngineInterface,
     TargetGrounderInterface,
 )
+from core.interfaces.reasoning_interface import (
+    ReasoningProviderInterface,
+    ActionProposalValidatorInterface,
+)
 
 __all__ = [
     "BrainInterface",
@@ -50,4 +54,6 @@ __all__ = [
     "VisualPerceptionProvider",
     "PerceptionEngineInterface",
     "TargetGrounderInterface",
+    "ReasoningProviderInterface",
+    "ActionProposalValidatorInterface",
 ]

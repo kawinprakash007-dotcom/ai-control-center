@@ -78,6 +78,16 @@ from core.models.perception import (
     GroundingAmbiguity,
     GroundingResult,
 )
+from core.models.reasoning import (
+    ReasoningOutcome,
+    ModelCapabilityType,
+    ProviderMetadata,
+    ActionProposal,
+    ReasoningRequest,
+    ReasoningResponse,
+    ProposalValidationResult,
+    ReasoningLimits,
+)
 
 __all__ = [
     "Request",
@@ -144,4 +154,12 @@ __all__ = [
     "GroundedTarget",
     "GroundingAmbiguity",
     "GroundingResult",
+    "ReasoningOutcome",
+    "ModelCapabilityType",
+    "ProviderMetadata",
+    "ActionProposal",
+    "ReasoningRequest",
+    "ReasoningResponse",
+    "ProposalValidationResult",
+    "ReasoningLimits",
 ]
