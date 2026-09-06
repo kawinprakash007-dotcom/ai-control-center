@@ -80,6 +80,26 @@ class ToolCall:
                 action = "fetch"
             elif not action or any(w in action for w in ("search", "web")):
                 action = "search"
+        elif tool_name == "computer":
+            if "screenshot" in action:
+                action = "screenshot"
+            elif "double" in action:
+                action = "double_click"
+            elif "click" in action:
+                action = "click"
+            elif "move" in action:
+                action = "move"
+            elif "type" in action:
+                action = "type"
+            elif "press" in action or "key" in action:
+                action = "press_key"
+            elif "scroll" in action:
+                action = "scroll"
+            elif "wait" in action:
+                action = "wait"
+            elif not action:
+                action = "screenshot"
+
 
         call_id = str(task.id) if hasattr(task, "id") and task.id is not None else None
 

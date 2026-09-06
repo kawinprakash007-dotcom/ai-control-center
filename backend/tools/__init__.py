@@ -5,6 +5,7 @@ from tools.memory_capability import MemoryCapability
 from tools.knowledge_capability import KnowledgeCapability
 from tools.web_capability import WebCapability
 from tools.tool_registry import TOOL_REGISTRY
+from computer.computer_capability import ComputerCapability
 
 __all__ = [
     "ToolOrchestrator",
@@ -13,5 +14,6 @@ __all__ = [
     "MemoryCapability",
     "KnowledgeCapability",
     "WebCapability",
+    "ComputerCapability",
     "TOOL_REGISTRY",
 ]

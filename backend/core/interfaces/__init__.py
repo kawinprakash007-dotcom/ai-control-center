@@ -24,6 +24,7 @@ from core.interfaces.recovery_interface import (
     RecoveryPlannerInterface,
     RecoveryEngineInterface,
 )
+from core.interfaces.computer_interface import ComputerBackendInterface
 
 __all__ = [
     "BrainInterface",
@@ -40,4 +41,5 @@ __all__ = [
     "PolicyEngineInterface",
     "RecoveryPlannerInterface",
     "RecoveryEngineInterface",
+    "ComputerBackendInterface",
 ]

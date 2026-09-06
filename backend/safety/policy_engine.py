@@ -56,7 +56,16 @@ class ProhibitedCapabilityRule(PolicyRule):
     def matches(self, tool_call: ToolCall, context: PolicyContext) -> bool:
         cap = tool_call.capability.lower()
         act = tool_call.action.lower()
-        return any(bad in cap or bad in act for bad in PROHIBITED_CAPABILITIES_AND_ACTIONS)
+        cap_parts = set(cap.replace("-", "_").split("_"))
+        act_parts = set(act.replace("-", "_").split("_"))
+        for bad in PROHIBITED_CAPABILITIES_AND_ACTIONS:
+            if len(bad) <= 2:
+                if bad in (cap, act) or bad in cap_parts or bad in act_parts:
+                    return True
+            else:
+                if bad in cap or bad in act:
+                    return True
+        return False
 
     def evaluate(self, tool_call: ToolCall, context: PolicyContext) -> PolicyResult:
         return PolicyResult.deny(
@@ -191,6 +200,119 @@ class SafeReadAndSearchRule(PolicyRule):
         )
 
 
+class ComputerObservationRule(PolicyRule):
+    """
+    Authorizes safe visual observation and bounded pause operations:
+    - computer: screenshot, wait
+    """
+    rule_id = "RULE_COMPUTER_OBSERVATION"
+    description = "Authorizes safe, read-only computer screenshot and wait operations."
+
+    def matches(self, tool_call: ToolCall, context: PolicyContext) -> bool:
+        cap = tool_call.capability.lower()
+        act = tool_call.action.lower()
+        return cap == "computer" and act in ("screenshot", "wait")
+
+    def evaluate(self, tool_call: ToolCall, context: PolicyContext) -> PolicyResult:
+        return PolicyResult.allow(
+            rule_id=f"RULE_COMPUTER_{tool_call.action.upper()}",
+            reason=f"Computer observation operation '{tool_call.action}' is permitted by safety policy.",
+            metadata={"risk_level": RiskLevel.SAFE.value},
+        )
+
+
+class ComputerLowRiskActionRule(PolicyRule):
+    """
+    Governs low-risk computer interaction actions:
+    - computer: move, scroll, click, double_click
+    Requires permission in MANUAL autonomy mode; allows in ASSISTED/AUTONOMOUS.
+    """
+    rule_id = "RULE_COMPUTER_LOW_RISK_ACTION"
+    description = "Governs mouse cursor, scroll, and click interactions based on autonomy level."
+
+    def matches(self, tool_call: ToolCall, context: PolicyContext) -> bool:
+        cap = tool_call.capability.lower()
+        act = tool_call.action.lower()
+        return cap == "computer" and act in ("move", "scroll", "click", "double_click")
+
+    def evaluate(self, tool_call: ToolCall, context: PolicyContext) -> PolicyResult:
+        if context.autonomy_level == AutonomyLevel.MANUAL:
+            return PolicyResult.ask_permission(
+                rule_id="RULE_MANUAL_AUTONOMY_COMPUTER_ACTION",
+                reason=f"Computer action '{tool_call.action}' requires user approval under MANUAL autonomy mode.",
+                explanation=f"Atlas wants to perform computer {tool_call.action}. Please approve to proceed.",
+                metadata={"risk_level": RiskLevel.MEDIUM.value},
+            )
+
+        return PolicyResult.allow(
+            rule_id=f"RULE_COMPUTER_{tool_call.action.upper()}",
+            reason=f"Computer action '{tool_call.action}' is authorized.",
+            metadata={"risk_level": RiskLevel.LOW.value},
+        )
+
+
+class ComputerSensitiveActionRule(PolicyRule):
+    """
+    Governs sensitive keyboard interactions:
+    - computer: type, press_key
+    Enforces permission/confirmation for sensitive text, credential keywords, dangerous shortcuts,
+    or MANUAL autonomy mode.
+    """
+    rule_id = "RULE_COMPUTER_SENSITIVE_KEYBOARD"
+    description = "Governs keyboard typing and shortcuts based on content sensitivity and autonomy level."
+
+    DANGEROUS_SHORTCUTS: Set[str] = {
+        "ctrl+alt+del", "ctrl+shift+esc", "alt+f4", "win+r", "win+x", "cmd", "powershell",
+    }
+
+    SENSITIVE_TEXT_PATTERNS: Set[str] = {
+        "password", "secret", "api_key", "token", "sudo", "rm -rf", "curl ", "wget ",
+    }
+
+    def matches(self, tool_call: ToolCall, context: PolicyContext) -> bool:
+        cap = tool_call.capability.lower()
+        act = tool_call.action.lower()
+        return cap == "computer" and act in ("type", "press_key")
+
+    def evaluate(self, tool_call: ToolCall, context: PolicyContext) -> PolicyResult:
+        act = tool_call.action.lower()
+        params = tool_call.parameters
+
+        if act == "press_key":
+            key = str(params.get("key", "")).lower().replace(" ", "")
+            if any(danger in key for danger in self.DANGEROUS_SHORTCUTS):
+                return PolicyResult.require_confirmation(
+                    rule_id="RULE_DANGEROUS_KEY_COMBINATION",
+                    reason=f"Pressing high-impact shortcut '{key}' requires explicit confirmation.",
+                    explanation=f"Key shortcut '{key}' can alter system state. Please confirm.",
+                    metadata={"risk_level": RiskLevel.HIGH.value, "key": key},
+                )
+
+        if act == "type":
+            text = str(params.get("text", "")).lower()
+            if any(pat in text for pat in self.SENSITIVE_TEXT_PATTERNS):
+                return PolicyResult.ask_permission(
+                    rule_id="RULE_SENSITIVE_TEXT_TYPING",
+                    reason="Typing content containing sensitive or command patterns requires permission.",
+                    explanation="The proposed text contains potential credential or command keywords.",
+                    metadata={"risk_level": RiskLevel.HIGH.value, "text_length": len(text)},
+                )
+
+        if context.autonomy_level == AutonomyLevel.MANUAL:
+            return PolicyResult.ask_permission(
+                rule_id="RULE_MANUAL_AUTONOMY_KEYBOARD",
+                reason=f"Keyboard operation '{act}' requires permission in MANUAL autonomy mode.",
+                explanation=f"Atlas wants to perform keyboard action '{act}'. Please approve.",
+                metadata={"risk_level": RiskLevel.MEDIUM.value},
+            )
+
+        return PolicyResult.allow(
+            rule_id=f"RULE_COMPUTER_{act.upper()}",
+            reason=f"Computer keyboard operation '{act}' is authorized.",
+            metadata={"risk_level": RiskLevel.LOW.value},
+        )
+
+
 class DefaultDenyRule(PolicyRule):
     """
     Catch-all default-deny rule enforcing that no unknown capability or action ever fails open.
@@ -232,8 +354,12 @@ class StandardPolicyEngine(PolicyEngineInterface):
                 DestructiveMemoryRule(),
                 SensitiveMemorySaveRule(),
                 SafeReadAndSearchRule(),
+                ComputerObservationRule(),
+                ComputerLowRiskActionRule(),
+                ComputerSensitiveActionRule(),
                 DefaultDenyRule(),
             ]
+
 
     def evaluate(
         self,

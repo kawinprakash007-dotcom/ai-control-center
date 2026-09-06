@@ -21,13 +21,28 @@ DEFAULT_ALLOWED_CAPABILITIES: Dict[str, Set[str]] = {
     "web": {"search", "fetch", "research"},
     "memory": {"save", "read", "forget", "remember", "recall"},
     "knowledge": {"query", "retrieve", "search", "retrieve knowledge", "retrieve_knowledge"},
+    "computer": {"screenshot", "click", "double_click", "move", "type", "press_key", "scroll", "wait"},
 }
+
 
 PROHIBITED_STRINGS: Set[str] = {
     "shell", "bash", "sh", "cmd", "powershell", "subprocess", "exec", "eval",
     "system", "filesystem", "rm", "delete_file", "write_file", "device",
     "browser", "computer_use", "spawn",
 }
+
+
+def _is_prohibited(name: str, prohibited_terms: Set[str]) -> bool:
+    name_clean = name.lower()
+    parts = set(name_clean.replace("-", "_").split("_"))
+    for bad in prohibited_terms:
+        if len(bad) <= 2:
+            if bad == name_clean or bad in parts:
+                return True
+        else:
+            if bad in name_clean:
+                return True
+    return False
 
 
 class ToolOrchestrator:
@@ -106,7 +121,7 @@ class ToolOrchestrator:
         params = tool_call.parameters
 
         # 1. Reject prohibited names
-        if any(bad in cap or bad in act for bad in PROHIBITED_STRINGS):
+        if _is_prohibited(cap, PROHIBITED_STRINGS) or _is_prohibited(act, PROHIBITED_STRINGS):
             return False, f"Prohibited capability or action name: '{cap}:{act}'."
 
         # 2. Capability whitelist check
@@ -170,7 +185,32 @@ class ToolOrchestrator:
                 if not q or not isinstance(q, str) or not q.strip():
                     return False, "Knowledge query requires a non-empty 'query' string parameter."
 
+        elif cap == "computer":
+            if act in ("click", "double_click", "move"):
+                x = params.get("x")
+                y = params.get("y")
+                target = params.get("target")
+                if (x is None or y is None) and (not isinstance(target, dict) and not hasattr(target, "x")):
+                    return False, f"Computer '{act}' requires integer coordinates 'x' and 'y' (or target object)."
+            elif act == "type":
+                text = params.get("text")
+                if text is None or not isinstance(text, str):
+                    return False, "Computer 'type' requires a string 'text' parameter."
+            elif act == "press_key":
+                key = params.get("key")
+                if not key or not isinstance(key, str):
+                    return False, "Computer 'press_key' requires a non-empty string 'key' parameter."
+            elif act == "scroll":
+                amount = params.get("amount")
+                if amount is not None and not isinstance(amount, int):
+                    return False, "Computer 'scroll' amount must be an integer."
+            elif act == "wait":
+                seconds = params.get("seconds")
+                if seconds is not None and not isinstance(seconds, (int, float)):
+                    return False, "Computer 'wait' seconds must be a numeric value."
+
         return True, None
+
 
     def _check_authorization(
         self,

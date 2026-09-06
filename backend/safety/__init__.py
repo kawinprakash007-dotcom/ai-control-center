@@ -6,6 +6,9 @@ from safety.policy_engine import (
     DestructiveMemoryRule,
     SensitiveMemorySaveRule,
     SafeReadAndSearchRule,
+    ComputerObservationRule,
+    ComputerLowRiskActionRule,
+    ComputerSensitiveActionRule,
     DefaultDenyRule,
 )
 
@@ -17,5 +20,8 @@ __all__ = [
     "DestructiveMemoryRule",
     "SensitiveMemorySaveRule",
     "SafeReadAndSearchRule",
+    "ComputerObservationRule",
+    "ComputerLowRiskActionRule",
+    "ComputerSensitiveActionRule",
     "DefaultDenyRule",
 ]

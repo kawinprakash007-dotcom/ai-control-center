@@ -58,6 +58,14 @@ from core.models.recovery import (
     RecoveryDecision,
     RecoveryContext,
 )
+from core.models.computer import (
+    ComputerAction,
+    TargetType,
+    ScreenDimensions,
+    ComputerTarget,
+    ComputerObservation,
+    ALLOWED_SPECIAL_KEYS,
+)
 
 __all__ = [
     "Request",
@@ -108,4 +116,10 @@ __all__ = [
     "PlanHistoryEntry",
     "RecoveryDecision",
     "RecoveryContext",
+    "ComputerAction",
+    "TargetType",
+    "ScreenDimensions",
+    "ComputerTarget",
+    "ComputerObservation",
+    "ALLOWED_SPECIAL_KEYS",
 ]

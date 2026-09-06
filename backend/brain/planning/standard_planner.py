@@ -58,6 +58,22 @@ class StandardPlanner(DecisionPlannerInterface):
                 plan.steps.append(task)
                 return plan
 
+            if decision.primary_goal in ("computer_action", "computer_use") or (
+                decision.primary_goal == "execute_tool" and decision.routing_hints.get("tool_hint") == "computer"
+            ):
+                params = self._extract_task_parameters(decision)
+                act_raw = params.get("action", "screenshot")
+                task = Task(
+                    id=1,
+                    type="computer",
+                    action=f"Computer {str(act_raw).capitalize()}",
+                    tool="computer",
+                    parameters=params,
+                    status="pending",
+                )
+                plan.steps.append(task)
+                return plan
+
             if decision.primary_goal == "execute_tool":
                 tool_hint = decision.routing_hints.get("tool_hint")
                 tool_name = tool_hint if tool_hint else "tool"
@@ -234,6 +250,14 @@ class StandardPlanner(DecisionPlannerInterface):
             "max_fetches",
             "min_evidence",
             "queries",
+            "x",
+            "y",
+            "text",
+            "amount",
+            "direction",
+            "seconds",
+            "button",
+            "target",
         ):
             if key in decision.routing_hints:
                 params[key] = decision.routing_hints[key]

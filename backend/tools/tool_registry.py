@@ -16,6 +16,7 @@ from tools.capabilities import (
 from tools.knowledge_capability import KnowledgeCapability
 from tools.memory_capability import MemoryCapability
 from tools.web_capability import WebCapability
+from computer.computer_capability import ComputerCapability
 
 
 TOOL_REGISTRY = {
@@ -50,6 +51,8 @@ TOOL_REGISTRY = {
 
     "knowledge": KnowledgeCapability(),
 
-    "web": WebCapability()
+    "web": WebCapability(),
+
+    "computer": ComputerCapability(),
 
 }
