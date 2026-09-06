@@ -253,7 +253,7 @@ class CognitiveRuntime(CognitiveRuntimeInterface):
             event_type=CognitiveEventType.TURN_STARTED,
             stage=CognitiveStage.RECEIVED,
             summary="Cognitive turn started",
-            metadata={"session_id": effective_session_id},
+            metadata={"session_id": effective_session_id, "input": str(input_data)},
         )
 
         is_empty = False

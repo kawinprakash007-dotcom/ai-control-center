@@ -43,6 +43,7 @@ from core.interfaces.runtime_interface import (
     CognitiveEventSinkInterface,
     CognitiveRuntimeInterface,
 )
+from core.interfaces.trace_store_interface import TraceStoreInterface
 
 __all__ = [
     "BrainInterface",
@@ -70,4 +71,5 @@ __all__ = [
     "ContextManagerInterface",
     "CognitiveEventSinkInterface",
     "CognitiveRuntimeInterface",
+    "TraceStoreInterface",
 ]

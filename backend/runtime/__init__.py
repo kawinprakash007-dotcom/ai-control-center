@@ -10,6 +10,24 @@ from runtime.event_sink import (
     LoggingEventSink,
     CompositeEventSink,
 )
+from runtime.serialization import (
+    SCHEMA_VERSION,
+    TraceSerializer,
+    TraceSerializationError,
+    UnsupportedSchemaVersionError,
+    compute_trace_hash,
+)
+from runtime.recorded_store import RecordedResultStore
+from runtime.comparator import TraceComparator, format_debug_summary
+from runtime.replay_engine import (
+    ReplayEngine,
+    ReplayExecutionEngine,
+    ReplayMemoryService,
+    ReplayPolicyEngine,
+    ReplayReasoningEngine,
+    ReplaySafetyViolation,
+)
+from runtime.file_trace_store import FileTraceStore
 
 __all__ = [
     "CognitiveRuntime",
@@ -20,4 +38,19 @@ __all__ = [
     "InMemoryEventSink",
     "LoggingEventSink",
     "CompositeEventSink",
+    "SCHEMA_VERSION",
+    "TraceSerializer",
+    "TraceSerializationError",
+    "UnsupportedSchemaVersionError",
+    "compute_trace_hash",
+    "RecordedResultStore",
+    "TraceComparator",
+    "format_debug_summary",
+    "ReplayEngine",
+    "ReplayExecutionEngine",
+    "ReplayMemoryService",
+    "ReplayPolicyEngine",
+    "ReplayReasoningEngine",
+    "ReplaySafetyViolation",
+    "FileTraceStore",
 ]

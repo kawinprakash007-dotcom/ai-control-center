@@ -118,6 +118,16 @@ from core.models.runtime import (
     CognitiveTurnResult,
     sanitize_event_metadata,
 )
+from core.models.replay import (
+    ReplayMode,
+    ReplayDivergenceType,
+    DivergenceSeverity,
+    ReplayDivergence,
+    ReplayLimits,
+    ReplayRequest,
+    ComparisonResult,
+    ReplayResult,
+)
 
 __all__ = [
     "Request",
@@ -216,4 +226,12 @@ __all__ = [
     "CognitiveTurn",
     "CognitiveTurnResult",
     "sanitize_event_metadata",
+    "ReplayMode",
+    "ReplayDivergenceType",
+    "DivergenceSeverity",
+    "ReplayDivergence",
+    "ReplayLimits",
+    "ReplayRequest",
+    "ComparisonResult",
+    "ReplayResult",
 ]
