@@ -15,6 +15,7 @@ from tools.capabilities import (
 
 from tools.knowledge_capability import KnowledgeCapability
 from tools.memory_capability import MemoryCapability
+from tools.web_capability import WebCapability
 
 
 TOOL_REGISTRY = {
@@ -47,6 +48,8 @@ TOOL_REGISTRY = {
 
     "vision": vision,
 
-    "knowledge": KnowledgeCapability()
+    "knowledge": KnowledgeCapability(),
+
+    "web": WebCapability()
 
 }

@@ -11,6 +11,10 @@ from core.interfaces.request_understanding_interface import (
 from core.interfaces.decision_engine_interface import (
     DecisionEngineInterface,
 )
+from core.interfaces.web_interface import (
+    WebProviderInterface,
+    WebProviderError,
+)
 
 __all__ = [
     "BrainInterface",
@@ -20,4 +24,6 @@ __all__ = [
     "MemoryServiceInterface",
     "RequestUnderstandingInterface",
     "DecisionEngineInterface",
+    "WebProviderInterface",
+    "WebProviderError",
 ]

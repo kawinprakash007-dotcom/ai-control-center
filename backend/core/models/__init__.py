@@ -17,6 +17,10 @@ from core.models.memory import (
     ChatMessage,
     MemoryEntry,
 )
+from core.models.web import (
+    SearchResult,
+    FetchResult,
+)
 
 __all__ = [
     "Request",
@@ -34,4 +38,6 @@ __all__ = [
     "MessageRole",
     "ChatMessage",
     "MemoryEntry",
+    "SearchResult",
+    "FetchResult",
 ]
