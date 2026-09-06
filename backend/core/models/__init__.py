@@ -12,6 +12,11 @@ from core.models.task import Task
 from core.models.result import Result
 from core.models.context import Context
 from core.models.reflection import ReflectionDecision
+from core.models.memory import (
+    MessageRole,
+    ChatMessage,
+    MemoryEntry,
+)
 
 __all__ = [
     "Request",
@@ -26,4 +31,7 @@ __all__ = [
     "Result",
     "Context",
     "ReflectionDecision",
+    "MessageRole",
+    "ChatMessage",
+    "MemoryEntry",
 ]
