@@ -77,6 +77,17 @@ class FakeMemoryService(MemoryServiceInterface):
     ) -> Optional[MemoryEntry]:
         return self.preferences.get((user_id, key))
 
+    def delete_preference(self, user_id: str, key: str) -> bool:
+        if (user_id, key) in self.preferences:
+            del self.preferences[(user_id, key)]
+            return True
+        return False
+
+    def list_preferences(self, user_id: str) -> List[MemoryEntry]:
+        results = [entry for (uid, _), entry in self.preferences.items() if uid == user_id]
+        results.sort(key=lambda e: e.key)
+        return results
+
 
 def test_pipeline_retrieves_memory_using_session_id():
     """1. Pipeline retrieves memory using request.session_id."""

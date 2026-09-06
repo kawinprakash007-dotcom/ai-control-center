@@ -336,3 +336,69 @@ class SQLiteMemoryStore(MemoryServiceInterface):
             user_id=u_id,
             updated_at=ts,
         )
+
+    def delete_preference(
+        self,
+        user_id: str,
+        key: str,
+    ) -> bool:
+        if not user_id or not isinstance(user_id, str) or not user_id.strip():
+            raise ValueError("user_id must be a non-empty string.")
+        if not key or not isinstance(key, str) or not key.strip():
+            raise ValueError("key must be a non-empty string.")
+
+        uid = user_id.strip()
+        k = key.strip()
+
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "DELETE FROM preferences WHERE user_id = ? AND key = ?",
+                (uid, k),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def list_preferences(
+        self,
+        user_id: str,
+    ) -> List[MemoryEntry]:
+        if not user_id or not isinstance(user_id, str) or not user_id.strip():
+            raise ValueError("user_id must be a non-empty string.")
+
+        uid = user_id.strip()
+
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                """
+                SELECT user_id, key, value, category, updated_at
+                FROM preferences
+                WHERE user_id = ?
+                ORDER BY key ASC
+                """,
+                (uid,),
+            )
+            rows = cursor.fetchall()
+
+        entries: List[MemoryEntry] = []
+        for row in rows:
+            u_id, entry_key, val_json, cat, ts_str = row
+            try:
+                val = json.loads(val_json)
+            except (json.JSONDecodeError, TypeError):
+                val = val_json
+
+            try:
+                ts = datetime.fromisoformat(ts_str)
+            except ValueError:
+                ts = datetime.now()
+
+            entries.append(
+                MemoryEntry(
+                    key=entry_key,
+                    value=val,
+                    category=cat,
+                    user_id=u_id,
+                    updated_at=ts,
+                )
+            )
+        return entries

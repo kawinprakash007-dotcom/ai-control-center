@@ -68,12 +68,12 @@ class StandardDecisionEngine(DecisionEngineInterface):
         detected_caps: List[CapabilityType] = []
         extra_hints: Dict[str, Any] = {}
 
-        # Knowledge detection
-        is_knowledge, query_hint = self._detect_knowledge(request)
-        if is_knowledge:
-            detected_caps.append(CapabilityType.KNOWLEDGE)
-            if query_hint:
-                extra_hints["query"] = query_hint
+        # Memory detection (evaluated FIRST so personal recall precedes generic knowledge)
+        is_memory, mem_hints = self._detect_memory(request)
+        if is_memory:
+            detected_caps.append(CapabilityType.MEMORY)
+            if mem_hints:
+                extra_hints.update(mem_hints)
 
         # Tool detection
         is_tool, tool_hint = self._detect_tool(request)
@@ -82,10 +82,20 @@ class StandardDecisionEngine(DecisionEngineInterface):
             if tool_hint:
                 extra_hints["tool_hint"] = tool_hint
 
-        # Memory detection
-        is_memory = self._detect_memory(text)
-        if is_memory:
-            detected_caps.append(CapabilityType.MEMORY)
+        # Knowledge detection
+        if not is_memory:
+            is_knowledge, query_hint = self._detect_knowledge(request)
+            if is_knowledge:
+                detected_caps.append(CapabilityType.KNOWLEDGE)
+                if query_hint:
+                    extra_hints["query"] = query_hint
+        else:
+            if re.search(r"\b(search for|find|retrieve|look up|read docs|documentation|documents?)\b", text, re.IGNORECASE):
+                is_knowledge, query_hint = self._detect_knowledge(request)
+                if is_knowledge and CapabilityType.KNOWLEDGE not in detected_caps:
+                    detected_caps.append(CapabilityType.KNOWLEDGE)
+                    if query_hint:
+                        extra_hints["query"] = query_hint
 
         # Vision detection
         if re.search(r"\b(screenshot|camera|image|picture|screen\s*capture)\b", text, re.IGNORECASE):
@@ -217,9 +227,149 @@ class StandardDecisionEngine(DecisionEngineInterface):
 
         return False, None
 
-    def _detect_memory(self, text: str) -> bool:
-        memory_pattern = r"\b(remember|recall|forget|store preference|my preference|my name is|what is my)\b"
-        return bool(re.search(memory_pattern, text, re.IGNORECASE))
+    def _detect_memory(self, request: Request) -> tuple[bool, Dict[str, Any]]:
+        text = request.normalized_text.strip()
+        hints: Dict[str, Any] = {}
+
+        # 1. SAVE / REMEMBER directives
+        save_match = re.match(
+            r"^(?:remember|save|store\s+preference|store)[:\s]+(?:that\s+)?(?:the\s+preference\s+that\s+)?(?:my\s+)?(.+?)\s+(?:is\s+called|is\s+named|is\s+set\s+to|is|was|to\s+be|as)\s+(.+?)[.!?]?$",
+            text,
+            re.IGNORECASE,
+        )
+        if save_match:
+            raw_key = save_match.group(1).strip()
+            val = save_match.group(2).strip()
+            k = self._normalize_memory_key(raw_key)
+            hints["action"] = "save"
+            hints["memory_action"] = "save"
+            hints["key"] = k
+            hints["value"] = val
+            hints["user_id"] = "default_user"
+            return True, hints
+
+        # Pattern 1b: explicit preference directives without linking verb: e.g. "store preference dark mode"
+        pref_match = re.match(
+            r"^(?:store\s+preference|save\s+preference|set\s+preference)[:\s]+(?:for\s+)?(.+?)[.!?]?$",
+            text,
+            re.IGNORECASE,
+        )
+        if pref_match:
+            raw_key = pref_match.group(1).strip()
+            k = self._normalize_memory_key(raw_key)
+            hints["action"] = "save"
+            hints["memory_action"] = "save"
+            hints["key"] = k
+            hints["value"] = raw_key
+            hints["user_id"] = "default_user"
+            return True, hints
+
+        # 2. FORGET directives
+        forget_match1 = re.match(
+            r"^(?:forget|delete|remove|clear)\s+(?:that\s+)?(?:my\s+)?(.+?)\s+(?:is\s+called|is\s+named|is|was|to\s+be|as)\s+(.+?)[.!?]?$",
+            text,
+            re.IGNORECASE,
+        )
+        if forget_match1:
+            raw_key = forget_match1.group(1).strip()
+            k = self._normalize_memory_key(raw_key)
+            hints["action"] = "forget"
+            hints["memory_action"] = "forget"
+            hints["key"] = k
+            hints["user_id"] = "default_user"
+            return True, hints
+
+        forget_match2 = re.match(
+            r"^(?:delete|remove|clear|forget)\s+(?:my\s+)?(?:saved\s+)?preference\s+for\s+(.+?)[.!?]?$",
+            text,
+            re.IGNORECASE,
+        )
+        if forget_match2:
+            raw_key = forget_match2.group(1).strip()
+            k = self._normalize_memory_key(raw_key)
+            hints["action"] = "forget"
+            hints["memory_action"] = "forget"
+            hints["key"] = k
+            hints["user_id"] = "default_user"
+            return True, hints
+
+        forget_match3 = re.match(
+            r"^(?:forget|delete|remove|clear)\s+(?:my\s+)?(.+?)[.!?]?$",
+            text,
+            re.IGNORECASE,
+        )
+        if forget_match3:
+            raw_key = forget_match3.group(1).strip()
+            if raw_key.lower() not in self.KNOWN_TOOLS:
+                k = self._normalize_memory_key(raw_key)
+                hints["action"] = "forget"
+                hints["memory_action"] = "forget"
+                hints["key"] = k
+                hints["user_id"] = "default_user"
+                return True, hints
+
+        # 3. READ directives
+        if re.search(
+            r"\b(?:what\s+do\s+you\s+(?:remember|know)\s+about\s+me|what\s+do\s+you\s+remember|what\s+memories\s+do\s+you\s+have|list\s+my\s+(?:memories|preferences)|show\s+my\s+(?:memories|preferences))\b",
+            text,
+            re.IGNORECASE,
+        ):
+            hints["action"] = "read"
+            hints["memory_action"] = "read"
+            hints["key"] = "all"
+            hints["user_id"] = "default_user"
+            return True, hints
+
+        read_match1 = re.match(
+            r"^(?:what\s+is|what\'s)\s+my\s+(.+?)[?.!]?$",
+            text,
+            re.IGNORECASE,
+        )
+        if read_match1:
+            raw_key = read_match1.group(1).strip()
+            k = self._normalize_memory_key(raw_key)
+            hints["action"] = "read"
+            hints["memory_action"] = "read"
+            hints["key"] = k
+            hints["user_id"] = "default_user"
+            return True, hints
+
+        read_match2 = re.match(
+            r"^what\s+did\s+i\s+tell\s+you\s+(?:that\s+)?my\s+(.+?)\s+was[?.!]?$",
+            text,
+            re.IGNORECASE,
+        )
+        if read_match2:
+            raw_key = read_match2.group(1).strip()
+            k = self._normalize_memory_key(raw_key)
+            hints["action"] = "read"
+            hints["memory_action"] = "read"
+            hints["key"] = k
+            hints["user_id"] = "default_user"
+            return True, hints
+
+        read_match3 = re.match(
+            r"^(?:recall|tell\s+me)\s+(?:my\s+)?(.+?)[?.!]?$",
+            text,
+            re.IGNORECASE,
+        )
+        if read_match3:
+            raw_key = read_match3.group(1).strip()
+            k = self._normalize_memory_key(raw_key)
+            hints["action"] = "read"
+            hints["memory_action"] = "read"
+            hints["key"] = k
+            hints["user_id"] = "default_user"
+            return True, hints
+
+        return False, hints
+
+    def _normalize_memory_key(self, raw_key: str) -> str:
+        k = raw_key.strip()
+        k = re.sub(r"^(?:my|the|preference\s+for|saved\s+preference\s+for)\s+", "", k, flags=re.IGNORECASE)
+        k = re.sub(r"[^\w\s-]", "", k).strip().lower()
+        k = re.sub(r"[\s-]+", "_", k)
+        return k
 
     def _build_routing_hints(
         self, request: Request, extra: Dict[str, Any]

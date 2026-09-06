@@ -102,6 +102,13 @@ class StandardPipeline(PipelineInterface):
                     if "history" not in params:
                         params["history"] = formatted_history
                     step.parameters = params
+                elif getattr(step, "type", None) == "memory" or getattr(step, "tool", None) == "memory":
+                    params = dict(step.parameters) if step.parameters else {}
+                    if "memory_service" not in params and self.memory_service is not None:
+                        params["memory_service"] = self.memory_service
+                    if "user_id" not in params:
+                        params["user_id"] = "default_user"
+                    step.parameters = params
 
 
 

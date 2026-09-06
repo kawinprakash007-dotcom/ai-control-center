@@ -67,6 +67,28 @@ class MemoryServiceInterface(ABC):
         """
         pass
 
+    @abstractmethod
+    def delete_preference(
+        self,
+        user_id: str,
+        key: str,
+    ) -> bool:
+        """
+        Delete a user-scoped preference or fact.
+        Returns True if a preference was deleted, False if not found.
+        """
+        pass
+
+    @abstractmethod
+    def list_preferences(
+        self,
+        user_id: str,
+    ) -> List[MemoryEntry]:
+        """
+        Retrieve all preferences or facts for the specified user.
+        """
+        pass
+
 
 class MemoryInterface(ABC):
     """

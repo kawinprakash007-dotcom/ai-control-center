@@ -185,7 +185,16 @@ class StandardPlanner(DecisionPlannerInterface):
             "ambiguity_reason",
             "collection",
             "author",
+            "action",
+            "memory_action",
+            "key",
+            "value",
+            "user_id",
         ):
             if key in decision.routing_hints:
                 params[key] = decision.routing_hints[key]
+
+        if "action" not in params and "memory_action" in params:
+            params["action"] = params["memory_action"]
+
         return params

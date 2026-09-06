@@ -274,6 +274,38 @@ def test_metadata_round_trip(temp_store):
     assert history[0].metadata["confidence"] == 0.98
 
 
+def test_delete_preference(temp_store):
+    """Delete preference removes only the targeted key and returns True/False."""
+    temp_store.save_preference("user-del", "k1", "v1")
+    temp_store.save_preference("user-del", "k2", "v2")
+
+    # Deleting existing key returns True
+    assert temp_store.delete_preference("user-del", "k1") is True
+    assert temp_store.get_preference("user-del", "k1") is None
+
+    # Other key remains untouched
+    assert temp_store.get_preference("user-del", "k2") is not None
+    assert temp_store.get_preference("user-del", "k2").value == "v2"
+
+    # Deleting non-existent key returns False
+    assert temp_store.delete_preference("user-del", "k1") is False
+    assert temp_store.delete_preference("user-del", "non_existent") is False
+
+
+def test_list_preferences(temp_store):
+    """List preferences returns all preferences for a user in deterministic order."""
+    assert temp_store.list_preferences("user-list") == []
+
+    temp_store.save_preference("user-list", "lang", "python")
+    temp_store.save_preference("user-list", "editor", "vscode")
+    temp_store.save_preference("other-user", "lang", "rust")
+
+    entries = temp_store.list_preferences("user-list")
+    assert len(entries) == 2
+    assert [e.key for e in entries] == ["editor", "lang"]
+    assert [e.value for e in entries] == ["vscode", "python"]
+
+
 # ============================================================================
 # 4. VALIDATION & ERROR HANDLING TESTS
 # ============================================================================
@@ -300,6 +332,18 @@ def test_invalid_input_validation(temp_store):
 
     with pytest.raises(ValueError):
         temp_store.get_preference("", "key")
+
+    with pytest.raises(ValueError):
+        temp_store.get_preference("u1", "")
+
+    with pytest.raises(ValueError):
+        temp_store.delete_preference("", "key")
+
+    with pytest.raises(ValueError):
+        temp_store.delete_preference("u1", "")
+
+    with pytest.raises(ValueError):
+        temp_store.list_preferences("")
 
 
 # ============================================================================

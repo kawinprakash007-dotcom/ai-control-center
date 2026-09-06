@@ -9,12 +9,12 @@ from tools.tools import (
 
 from tools.capabilities import (
     chat,
-    memory,
     automation,
     vision
 )
 
 from tools.knowledge_capability import KnowledgeCapability
+from tools.memory_capability import MemoryCapability
 
 
 TOOL_REGISTRY = {
@@ -41,7 +41,7 @@ TOOL_REGISTRY = {
 
     "chat": chat,
 
-    "memory": memory,
+    "memory": MemoryCapability(),
 
     "automation": automation,
 
