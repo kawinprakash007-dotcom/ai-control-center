@@ -37,6 +37,9 @@ from core.models.research import (
     AgentAction,
     ResearchObservation,
     ResearchLimits,
+    EvidenceAssessment,
+    ResearchGap,
+    Contradiction,
 )
 
 __all__ = [
@@ -72,4 +75,7 @@ __all__ = [
     "AgentAction",
     "ResearchObservation",
     "ResearchLimits",
+    "EvidenceAssessment",
+    "ResearchGap",
+    "Contradiction",
 ]

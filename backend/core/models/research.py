@@ -120,3 +120,120 @@ class ResearchLimits:
             max_invalid_actions=max(1, min(self.max_invalid_actions, 5)),
             timeout_seconds=max(0.1, min(self.timeout_seconds, 60.0)),
         )
+
+
+@dataclass(frozen=True)
+class EvidenceAssessment:
+    """
+    Structured, deterministic evaluation signals for a collected EvidenceItem.
+    Provides clear supporting signals for reasoning without claiming absolute truth.
+
+    Attributes:
+        evidence_id: Identifier of evaluated EvidenceItem.
+        relevance_score: Relevancy to research objective [0.0 - 1.0].
+        freshness_score: Timeliness and temporal freshness [0.0 - 1.0].
+        coverage_score: Breadth of information provided [0.0 - 1.0].
+        quality_score: Heuristic source/content quality [0.0 - 1.0].
+        has_contradiction: Whether this evidence conflicts with other items.
+        source_signal: Category of source (e.g. 'official', 'documentation', 'general').
+        notes: Supporting summary of evaluation findings.
+    """
+    evidence_id: str
+    relevance_score: float = 0.5
+    freshness_score: float = 0.5
+    coverage_score: float = 0.5
+    quality_score: float = 0.5
+    has_contradiction: bool = False
+    source_signal: str = "general"
+    notes: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "evidence_id": self.evidence_id,
+            "relevance_score": self.relevance_score,
+            "freshness_score": self.freshness_score,
+            "coverage_score": self.coverage_score,
+            "quality_score": self.quality_score,
+            "has_contradiction": self.has_contradiction,
+            "source_signal": self.source_signal,
+            "notes": self.notes,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "EvidenceAssessment":
+        return cls(
+            evidence_id=str(data.get("evidence_id", "")),
+            relevance_score=float(data.get("relevance_score", 0.5)),
+            freshness_score=float(data.get("freshness_score", 0.5)),
+            coverage_score=float(data.get("coverage_score", 0.5)),
+            quality_score=float(data.get("quality_score", 0.5)),
+            has_contradiction=bool(data.get("has_contradiction", False)),
+            source_signal=str(data.get("source_signal", "general")),
+            notes=str(data.get("notes", "")),
+        )
+
+
+@dataclass(frozen=True)
+class ResearchGap:
+    """
+    Identified deficiency or unanswered facet in the current evidence set.
+    Drives adaptive query generation and follow-up fetches.
+
+    Attributes:
+        topic: Specific missing aspect or query focus.
+        reason: Explanation of why this information is needed.
+        priority: Urgency of gap (1=high, 2=medium, 3=low).
+    """
+    topic: str
+    reason: str
+    priority: int = 1
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "topic": self.topic,
+            "reason": self.reason,
+            "priority": self.priority,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ResearchGap":
+        return cls(
+            topic=str(data.get("topic", "")),
+            reason=str(data.get("reason", "")),
+            priority=int(data.get("priority", 1)),
+        )
+
+
+@dataclass(frozen=True)
+class Contradiction:
+    """
+    Detected factual or numeric discrepancy between two or more evidence items.
+    Preserves all conflicting sources without prematurely discarding either.
+
+    Attributes:
+        topic: Subject or parameter of disagreement.
+        evidence_ids: Identifiers of the contradictory EvidenceItems.
+        conflicting_claims: Excerpts or summaries of opposing claims.
+        resolved: Whether the conflict has been clarified by further evidence.
+    """
+    topic: str
+    evidence_ids: Tuple[str, ...]
+    conflicting_claims: Tuple[str, ...]
+    resolved: bool = False
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "topic": self.topic,
+            "evidence_ids": list(self.evidence_ids),
+            "conflicting_claims": list(self.conflicting_claims),
+            "resolved": self.resolved,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "Contradiction":
+        return cls(
+            topic=str(data.get("topic", "")),
+            evidence_ids=tuple(data.get("evidence_ids", ())),
+            conflicting_claims=tuple(data.get("conflicting_claims", ())),
+            resolved=bool(data.get("resolved", False)),
+        )

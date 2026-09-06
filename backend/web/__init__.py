@@ -4,7 +4,9 @@ from web.research_agent import (
     ResearchAgent,
     ActionValidator,
     DeterministicResearchReasoner,
+    AdaptiveResearchReasoner,
 )
+from web.evidence_evaluator import EvidenceEvaluator
 
 __all__ = [
     "DefaultWebProvider",
@@ -12,4 +14,6 @@ __all__ = [
     "ResearchAgent",
     "ActionValidator",
     "DeterministicResearchReasoner",
+    "AdaptiveResearchReasoner",
+    "EvidenceEvaluator",
 ]

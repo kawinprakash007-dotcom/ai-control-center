@@ -11,6 +11,9 @@ from core.models.research import (
     AgentActionType,
     ResearchObservation,
     ResearchLimits,
+    EvidenceAssessment,
+    ResearchGap,
+    Contradiction,
 )
 from core.models.web import (
     EvidenceItem,
@@ -24,6 +27,7 @@ from core.models.web import (
     canonicalize_url,
     validate_citation_references,
 )
+from web.evidence_evaluator import EvidenceEvaluator
 
 
 class ActionValidator:
@@ -198,6 +202,122 @@ class DeterministicResearchReasoner(ResearchReasonerInterface):
         )
 
 
+class AdaptiveResearchReasoner(ResearchReasonerInterface):
+    """
+    Model-neutral adaptive research reasoner (Phase 3.1).
+    Evaluates evidence coverage and research gaps to dynamically generate the next
+    adaptive query, investigate contradictions, or deepen evidence via fetch.
+    """
+
+    def __init__(self):
+        self._fetched_urls: Set[str] = set()
+        self._issued_queries: Set[str] = set()
+
+    def decide_next_action(self, state: ResearchState) -> AgentAction:
+        clean_obj = state.objective.strip()
+
+        # Step 1: Initial query if no evidence collected yet
+        if not state.evidence:
+            query = self._build_initial_query(clean_obj)
+            self._issued_queries.add(query.lower())
+            return AgentAction(
+                action_type=AgentActionType.SEARCH,
+                parameters={"query": query, "max_results": 5},
+                reason=f"Initial evidence collection for '{query}'.",
+            )
+
+        # Step 2: Adaptive query targeting identified research gaps
+        if state.gaps:
+            sorted_gaps = sorted(state.gaps, key=lambda g: g.priority)
+            for gap in sorted_gaps:
+                gap_query = self._build_gap_query(clean_obj, gap.topic)
+                if gap_query.lower() not in self._issued_queries:
+                    self._issued_queries.add(gap_query.lower())
+                    return AgentAction(
+                        action_type=AgentActionType.SEARCH,
+                        parameters={"query": gap_query, "max_results": 5},
+                        reason=f"Adaptive search to cover missing aspect '{gap.topic}': {gap.reason}",
+                    )
+
+        # Step 3: Deepen understanding of contradictory claims if detected
+        if state.contradictions and state.searches_used < 4:
+            unresolved = [c for c in state.contradictions if not c.resolved]
+            if unresolved:
+                contra = unresolved[0]
+                contra_query = f"official {contra.topic} specifications"
+                if contra_query.lower() not in self._issued_queries:
+                    self._issued_queries.add(contra_query.lower())
+                    return AgentAction(
+                        action_type=AgentActionType.SEARCH,
+                        parameters={"query": contra_query, "max_results": 3},
+                        reason=f"Targeted search to clarify contradiction on '{contra.topic}'.",
+                    )
+
+        # Step 4: Fetch detailed content for highest-quality un-fetched evidence item
+        unfetched = [
+            item for item in state.evidence
+            if item.url and item.url not in self._fetched_urls and item.metadata.get("type") != "fetch_result"
+        ]
+        if unfetched:
+            assessment_map = {a.evidence_id: (a.quality_score + a.relevance_score) for a in state.assessments}
+            unfetched.sort(key=lambda item: assessment_map.get(item.id, 0.5), reverse=True)
+            chosen = unfetched[0]
+            self._fetched_urls.add(chosen.url)
+            return AgentAction(
+                action_type=AgentActionType.FETCH,
+                parameters={"url": chosen.url},
+                reason=f"Fetch rich content from authoritative source {chosen.url}.",
+            )
+
+        # Step 5: If all gaps and fetches addressed, or sufficient evidence gathered -> FINISH
+        return AgentAction(
+            action_type=AgentActionType.FINISH,
+            parameters={},
+            reason="Research objective covered with sufficient verified evidence.",
+        )
+
+    def _build_initial_query(self, objective: str) -> str:
+        cleaned = objective.strip()
+        leading_patterns = [
+            r"^(?:please\s+)?research\s+(?:the\s+)?(?:latest\s+)?(?:about\s+|on\s+)?",
+            r"^(?:please\s+)?research\s+",
+            r"^(?:please\s+)?investigate\s+(?:the\s+)?(?:latest\s+)?(?:about\s+|on\s+)?",
+            r"^(?:please\s+)?investigate\s+",
+            r"^(?:please\s+)?compare\s+(?:several\s+)?sources\s+(?:for|about|on)\s+",
+            r"^(?:please\s+)?deep\s+search\s+(?:for|about|on)\s+",
+            r"^(?:please\s+)?find\s+out\s+about\s+",
+        ]
+        for pat in leading_patterns:
+            m = re.match(pat, cleaned, re.IGNORECASE)
+            if m:
+                cleaned = cleaned[m.end():].strip()
+                break
+
+        trailing_patterns = [
+            r"\s+and\s+compare\s+(?:several\s+)?sources[.!?]?$",
+            r"\s+comparing\s+(?:several\s+)?sources[.!?]?$",
+            r"\s+across\s+(?:several|multiple)\s+sources[.!?]?$",
+            r"\s+from\s+(?:several|multiple)\s+sources[.!?]?$",
+            r"[.!?]+$",
+        ]
+        for pat in trailing_patterns:
+            cleaned = re.sub(pat, "", cleaned, flags=re.IGNORECASE).strip()
+
+        compare_match = re.search(r"^(?:compare\s+)?(.+?)\s+(?:vs\.?|versus|and|with)\s+(.+?)(?:\s+(?:for|on|in)\s+|$)", cleaned, re.IGNORECASE)
+        if compare_match:
+            side_a = compare_match.group(1).strip()
+            return f"{side_a} AI benchmark" if "ai" in cleaned.lower() else side_a
+
+        return cleaned if cleaned else objective.strip()
+
+    def _build_gap_query(self, objective: str, gap_topic: str) -> str:
+        gap_clean = gap_topic.strip()
+        if any(w in objective.lower() for w in ("ai", "benchmark", "performance")):
+            if not any(w in gap_clean.lower() for w in ("benchmark", "performance", "specs", "power", "price")):
+                return f"{gap_clean} AI benchmark"
+        return f"{gap_clean} benchmark overview" if len(gap_clean.split()) <= 2 else gap_clean
+
+
 class ResearchAgent:
     """
     Autonomous Research Agent (Phase 3.0).
@@ -216,6 +336,7 @@ class ResearchAgent:
         reasoner: Optional[ResearchReasonerInterface] = None,
         synthesizer: Optional[Union[ResearchSynthesizerInterface, Callable[[str, EvidenceSet, CitationSet], str]]] = None,
         limits: Optional[ResearchLimits] = None,
+        evaluator: Optional[EvidenceEvaluator] = None,
     ):
         if provider is not None:
             self.provider = provider
@@ -226,7 +347,8 @@ class ResearchAgent:
             except ImportError:
                 self.provider = None
 
-        self.reasoner = reasoner if reasoner is not None else DeterministicResearchReasoner()
+        self.evaluator = evaluator if evaluator is not None else EvidenceEvaluator()
+        self.reasoner = reasoner if reasoner is not None else AdaptiveResearchReasoner()
         self.synthesizer = synthesizer
         self.limits = (limits or ResearchLimits()).enforce_caps()
         self.validator = ActionValidator()
@@ -298,8 +420,12 @@ class ResearchAgent:
             iteration += 1
 
             # -------------------------------------------------------------
-            # 1. State Snapshot for Reasoner
+            # 1. Evidence Evaluation & Gap Analysis
             # -------------------------------------------------------------
+            assessments, gaps, contradictions = self.evaluator.evaluate(
+                accumulated_items, clean_objective
+            )
+
             current_state = ResearchState(
                 objective=clean_objective,
                 iteration=iteration,
@@ -313,6 +439,9 @@ class ResearchAgent:
                 last_action=last_action,
                 last_error=last_error_str,
                 status="in_progress",
+                assessments=assessments,
+                gaps=gaps,
+                contradictions=contradictions,
             )
 
             # -------------------------------------------------------------
@@ -558,8 +687,12 @@ class ResearchAgent:
             raise self.last_error
 
         # -------------------------------------------------------------
-        # 8. Synthesis
+        # 8. Final Evaluation & Synthesis
         # -------------------------------------------------------------
+        final_assessments, final_gaps, final_contradictions = self.evaluator.evaluate(
+            evidence_set.items, clean_objective
+        )
+
         final_state = ResearchState(
             objective=clean_objective,
             iteration=iteration,
@@ -573,6 +706,9 @@ class ResearchAgent:
             last_action=last_action,
             last_error=last_error_str,
             status=status,
+            assessments=final_assessments,
+            gaps=final_gaps,
+            contradictions=final_contradictions,
         )
 
         output = self._synthesize(
@@ -586,6 +722,9 @@ class ResearchAgent:
             status=status,
             output=output,
             state=final_state,
+            assessments=final_assessments,
+            gaps=final_gaps,
+            contradictions=final_contradictions,
         )
 
     def _synthesize(
@@ -602,7 +741,7 @@ class ResearchAgent:
         Priority:
         1. Injected synthesizer callback / interface
         2. Reasoner.synthesize hook (if provided)
-        3. Deterministic synthesis fallback
+        3. Deterministic synthesis fallback with quality ranking and contradiction awareness
         """
         # 1. Injected synthesizer
         if self.synthesizer is not None:
@@ -626,19 +765,41 @@ class ResearchAgent:
                 return f"Research failed for: '{objective}'. Unable to gather required evidence ({stop_reason})."
             return f"No research findings found for: '{objective}'."
 
+        # Order evidence items by composite quality & relevance
+        assessment_map = {
+            a.evidence_id: (a.quality_score + a.relevance_score)
+            for a in state.assessments
+        }
+        sorted_items = sorted(
+            evidence.items,
+            key=lambda it: assessment_map.get(it.id, 0.5),
+            reverse=True,
+        )
+
         lines: List[str] = []
         if status == "partial":
             lines.append("[Note: Research concluded with partial results due to execution limits.]\n")
 
         lines.append(f"Research findings for '{objective}':\n")
         lines.append("Key Findings:")
-        for idx, item in enumerate(evidence.items, start=1):
-            citation = citations[idx - 1] if idx - 1 < len(citations) else None
+        for idx, item in enumerate(sorted_items, start=1):
+            citation = citations.get_by_evidence_id(item.id)
             marker = citation.render_marker() if citation else f"[{idx}]"
             content_snippet = (item.content or "").strip()
             if len(content_snippet) > 200:
                 content_snippet = content_snippet[:197] + "..."
             lines.append(f"- {item.title}: {content_snippet} {marker}")
+
+        # Phase 3.1: Explicitly surface unresolved contradictions
+        if state.contradictions:
+            unresolved = [c for c in state.contradictions if not c.resolved]
+            if unresolved:
+                lines.append("")
+                lines.append("Contradictions & Discrepancies:")
+                for c in unresolved:
+                    lines.append(f"- {c.topic}:")
+                    for claim in c.conflicting_claims:
+                        lines.append(f"  * {claim}")
 
         lines.append("")
         lines.append(citations.render_sources_block())

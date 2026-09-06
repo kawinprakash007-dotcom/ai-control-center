@@ -420,6 +420,9 @@ class ResearchState:
     last_action: Optional[Any] = None
     last_error: Optional[str] = None
     status: str = "in_progress"
+    assessments: Tuple[Any, ...] = field(default_factory=tuple)
+    gaps: Tuple[Any, ...] = field(default_factory=tuple)
+    contradictions: Tuple[Any, ...] = field(default_factory=tuple)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -442,6 +445,18 @@ class ResearchState:
                 if hasattr(self.last_action, "to_dict")
                 else (self.last_action if self.last_action else None)
             ),
+            "assessments": [
+                a.to_dict() if hasattr(a, "to_dict") else a
+                for a in self.assessments
+            ],
+            "gaps": [
+                g.to_dict() if hasattr(g, "to_dict") else g
+                for g in self.gaps
+            ],
+            "contradictions": [
+                c.to_dict() if hasattr(c, "to_dict") else c
+                for c in self.contradictions
+            ],
         }
 
 
@@ -457,6 +472,9 @@ class ResearchResult:
         status: Final status ('completed', 'partial', 'failed').
         output: Synthesized textual response with sources.
         state: Final ResearchState snapshot.
+        assessments: Tuple of EvidenceAssessment evaluation records.
+        gaps: Tuple of remaining or addressed ResearchGap records.
+        contradictions: Tuple of identified Contradiction records.
     """
     objective: str
     evidence: EvidenceSet
@@ -464,6 +482,9 @@ class ResearchResult:
     status: str
     output: str
     state: Optional[ResearchState] = None
+    assessments: Tuple[Any, ...] = field(default_factory=tuple)
+    gaps: Tuple[Any, ...] = field(default_factory=tuple)
+    contradictions: Tuple[Any, ...] = field(default_factory=tuple)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -473,6 +494,18 @@ class ResearchResult:
             "status": self.status,
             "output": self.output,
             "state": self.state.to_dict() if self.state else None,
+            "assessments": [
+                a.to_dict() if hasattr(a, "to_dict") else a
+                for a in self.assessments
+            ],
+            "gaps": [
+                g.to_dict() if hasattr(g, "to_dict") else g
+                for g in self.gaps
+            ],
+            "contradictions": [
+                c.to_dict() if hasattr(c, "to_dict") else c
+                for c in self.contradictions
+            ],
         }
 
 
