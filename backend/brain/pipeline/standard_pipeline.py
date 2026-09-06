@@ -9,8 +9,12 @@ from core.interfaces.verification_interface import VerificationInterface
 from core.interfaces.response_composer_interface import ResponseComposerInterface
 from core.interfaces.memory_interface import MemoryServiceInterface
 from core.interfaces.web_interface import WebProviderInterface
+from core.interfaces.recovery_interface import RecoveryEngineInterface
 from core.models.pipeline import PipelineResult
 from core.models.memory import MessageRole
+from core.models.request import Request
+from core.models.plan import Plan
+from core.models.result import Result
 
 from brain.request_understanding import StandardRequestUnderstanding
 from brain.decision_engine import StandardDecisionEngine
@@ -25,7 +29,7 @@ class StandardPipeline(PipelineInterface):
     """
     Deterministic implementation of PipelineInterface.
     Orchestrates the Phase 2 request lifecycle:
-    Understanding -> Memory Read -> Decision -> Planning -> Execution -> Verification -> Response -> Memory Write.
+    Understanding -> Memory Read -> Decision -> Planning -> Execution -> Verification -> (Recovery) -> Response -> Memory Write.
     """
 
     def __init__(
@@ -38,6 +42,8 @@ class StandardPipeline(PipelineInterface):
         composer: Optional[ResponseComposerInterface] = None,
         memory_service: Optional[MemoryServiceInterface] = None,
         web_provider: Optional[WebProviderInterface] = None,
+        recovery_engine: Optional[RecoveryEngineInterface] = None,
+        enable_recovery: bool = True,
     ):
         self.understanding = (
             understanding
@@ -76,6 +82,66 @@ class StandardPipeline(PipelineInterface):
         )
         self.web_provider = web_provider
 
+        if recovery_engine is not None:
+            self.recovery_engine = recovery_engine
+        elif enable_recovery:
+            try:
+                from brain.recovery.recovery_engine import StandardRecoveryEngine
+                self.recovery_engine = StandardRecoveryEngine()
+            except ImportError:
+                self.recovery_engine = None
+        else:
+            self.recovery_engine = None
+
+    def _inject_context(
+        self,
+        plan: Plan,
+        request: Request,
+        history_entries: List[Any],
+        is_empty: bool,
+    ) -> None:
+        """Inject contextual dependencies (memory, history, web) into plan steps without mutating Request."""
+        if not plan.steps or is_empty:
+            return
+
+        formatted_history: List[Dict[str, str]] = [
+            {"role": msg.role.value, "content": msg.content}
+            for msg in history_entries
+        ]
+        for step in plan.steps:
+            step_type = getattr(step, "type", None)
+            step_tool = getattr(step, "tool", None)
+            if step_type == "chat" or step_tool == "chat":
+                params = dict(step.parameters) if step.parameters else {}
+                if "query" not in params:
+                    params["query"] = request.original_text
+                if "history" not in params:
+                    params["history"] = formatted_history
+                step.parameters = params
+            elif step_type == "memory" or step_tool == "memory":
+                params = dict(step.parameters) if step.parameters else {}
+                if "memory_service" not in params and self.memory_service is not None:
+                    params["memory_service"] = self.memory_service
+                if "user_id" not in params:
+                    params["user_id"] = "default_user"
+                step.parameters = params
+            elif step_type == "web" or step_tool == "web":
+                params = dict(step.parameters) if step.parameters else {}
+                if "web_provider" not in params and self.web_provider is not None:
+                    params["web_provider"] = self.web_provider
+                step.parameters = params
+
+    def _execute_plan(
+        self,
+        plan: Plan,
+        request: Request,
+        history_entries: List[Any],
+        is_empty: bool,
+    ) -> List[Result]:
+        """Inject contextual dependencies and execute plan via execution_engine."""
+        self._inject_context(plan, request, history_entries, is_empty)
+        return self.execution_engine.execute(plan)
+
     def process(self, input_data: Any) -> PipelineResult:
         """
         Execute the full Phase 2 lifecycle and return structured PipelineResult.
@@ -91,37 +157,21 @@ class StandardPipeline(PipelineInterface):
         decision = self.decision_engine.decide(request)
         plan = self.planner.plan(decision)
 
-        # Supply conversation context to tasks without mutating Request
-        if plan.steps and not is_empty:
-            formatted_history: List[Dict[str, str]] = [
-                {"role": msg.role.value, "content": msg.content}
-                for msg in history_entries
-            ]
-            for step in plan.steps:
-                if getattr(step, "type", None) == "chat" or getattr(step, "tool", None) == "chat":
-                    params = dict(step.parameters) if step.parameters else {}
-                    if "query" not in params:
-                        params["query"] = request.original_text
-                    if "history" not in params:
-                        params["history"] = formatted_history
-                    step.parameters = params
-                elif getattr(step, "type", None) == "memory" or getattr(step, "tool", None) == "memory":
-                    params = dict(step.parameters) if step.parameters else {}
-                    if "memory_service" not in params and self.memory_service is not None:
-                        params["memory_service"] = self.memory_service
-                    if "user_id" not in params:
-                        params["user_id"] = "default_user"
-                    step.parameters = params
-                elif getattr(step, "type", None) == "web" or getattr(step, "tool", None) == "web":
-                    params = dict(step.parameters) if step.parameters else {}
-                    if "web_provider" not in params and self.web_provider is not None:
-                        params["web_provider"] = self.web_provider
-                    step.parameters = params
+        def execute_fn(p: Plan) -> List[Result]:
+            return self._execute_plan(p, request, history_entries, is_empty)
 
+        recovery_context = None
+        if self.recovery_engine is not None:
+            plan, results, verification, recovery_context = self.recovery_engine.recover(
+                original_goal=request.original_text,
+                initial_plan=plan,
+                execute_fn=execute_fn,
+                verify_fn=self.verifier.verify,
+            )
+        else:
+            results = execute_fn(plan)
+            verification = self.verifier.verify(plan, results)
 
-
-        results = self.execution_engine.execute(plan)
-        verification = self.verifier.verify(plan, results)
         response = self.composer.compose(
             request,
             decision,
@@ -129,6 +179,7 @@ class StandardPipeline(PipelineInterface):
             results,
             verification,
         )
+
 
         # Memory Write: persist user turn and assistant response exactly once
         if not is_empty:
@@ -150,7 +201,9 @@ class StandardPipeline(PipelineInterface):
             plan=plan,
             results=results,
             verification=verification,
+            recovery=recovery_context,
         )
+
 
     def run(self, input_data: Any) -> str:
         """

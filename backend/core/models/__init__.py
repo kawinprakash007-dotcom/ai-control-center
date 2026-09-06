@@ -49,6 +49,15 @@ from core.models.policy import (
     PolicyContext,
     PolicyResult,
 )
+from core.models.recovery import (
+    ExecutionOutcome,
+    RecoveryAction,
+    FailureClassification,
+    RecoveryLimits,
+    PlanHistoryEntry,
+    RecoveryDecision,
+    RecoveryContext,
+)
 
 __all__ = [
     "Request",
@@ -92,4 +101,11 @@ __all__ = [
     "RiskLevel",
     "PolicyContext",
     "PolicyResult",
+    "ExecutionOutcome",
+    "RecoveryAction",
+    "FailureClassification",
+    "RecoveryLimits",
+    "PlanHistoryEntry",
+    "RecoveryDecision",
+    "RecoveryContext",
 ]

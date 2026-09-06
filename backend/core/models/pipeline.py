@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional, Any
 
 from core.models.request import Request
 from core.models.decision import Decision
@@ -20,6 +20,7 @@ class PipelineResult:
         plan: The execution Plan with final task statuses and results.
         results: Ordered list of execution Results.
         verification: Structural VerificationResult evaluating execution outcome.
+        recovery: Optional RecoveryContext representing recovery/replanning attempts.
     """
 
     response: str
@@ -28,3 +29,4 @@ class PipelineResult:
     plan: Plan
     results: List[Result]
     verification: VerificationResult
+    recovery: Optional[Any] = None

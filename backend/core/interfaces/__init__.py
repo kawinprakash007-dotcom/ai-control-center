@@ -20,6 +20,10 @@ from core.interfaces.research_interface import (
     ResearchSynthesizerInterface,
 )
 from core.interfaces.policy_interface import PolicyEngineInterface
+from core.interfaces.recovery_interface import (
+    RecoveryPlannerInterface,
+    RecoveryEngineInterface,
+)
 
 __all__ = [
     "BrainInterface",
@@ -34,4 +38,6 @@ __all__ = [
     "ResearchReasonerInterface",
     "ResearchSynthesizerInterface",
     "PolicyEngineInterface",
+    "RecoveryPlannerInterface",
+    "RecoveryEngineInterface",
 ]
