@@ -6,7 +6,15 @@ from core.models.decision import (
     CapabilityRequirement,
 )
 from core.models.intent import Intent
-from core.models.goal import Goal
+from core.models.goal import (
+    Goal,
+    GoalStatus,
+    Objective,
+    ObjectiveStatus,
+    GoalConstraints,
+    GoalCompletionCriteria,
+    GoalProgress,
+)
 from core.models.plan import Plan
 from core.models.task import Task
 from core.models.result import Result
@@ -234,4 +242,10 @@ __all__ = [
     "ReplayRequest",
     "ComparisonResult",
     "ReplayResult",
+    "GoalStatus",
+    "Objective",
+    "ObjectiveStatus",
+    "GoalConstraints",
+    "GoalCompletionCriteria",
+    "GoalProgress",
 ]

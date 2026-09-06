@@ -44,6 +44,11 @@ from core.interfaces.runtime_interface import (
     CognitiveRuntimeInterface,
 )
 from core.interfaces.trace_store_interface import TraceStoreInterface
+from core.interfaces.goal_interface import (
+    GoalDecomposerInterface,
+    GoalStoreInterface,
+    GoalExecutionEngineInterface,
+)
 
 __all__ = [
     "BrainInterface",
@@ -72,4 +77,7 @@ __all__ = [
     "CognitiveEventSinkInterface",
     "CognitiveRuntimeInterface",
     "TraceStoreInterface",
+    "GoalDecomposerInterface",
+    "GoalStoreInterface",
+    "GoalExecutionEngineInterface",
 ]

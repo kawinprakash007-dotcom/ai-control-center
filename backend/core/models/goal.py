@@ -1,17 +1,185 @@
-from dataclasses import dataclass
+import time
+import uuid
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+
+class GoalStatus(str, Enum):
+    """
+    Lifecycle status of a high-level ATLAS goal.
+    Explicit vocabulary distinguishing active, paused, blocked, waiting, and terminal states.
+    """
+    CREATED = "created"
+    RUNNING = "running"
+    PAUSED = "paused"
+    BLOCKED = "blocked"
+    WAITING_FOR_USER = "waiting_for_user"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    ABORTED = "aborted"
+    CANCELLED = "cancelled"
+
+
+class ObjectiveStatus(str, Enum):
+    """
+    Lifecycle status of an individual objective within a goal.
+    """
+    PENDING = "pending"
+    READY = "ready"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    PARTIAL = "partial"
+    BLOCKED = "blocked"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+    CANCELLED = "cancelled"
+
+
+@dataclass(frozen=True)
+class GoalConstraints:
+    """
+    Bounded constraints describing goal execution limits and parameters.
+    """
+    deadline: Optional[float] = None
+    allowed_capabilities: Optional[Tuple[str, ...]] = None
+    max_turns_total: int = 20
+    max_turns_per_objective: int = 5
+    max_failed_objectives: int = 2
+    max_consecutive_no_progress: int = 3
+    privacy_requirement: Optional[str] = None
+    autonomy_level: str = "supervised"
+
+
+@dataclass(frozen=True)
+class GoalCompletionCriteria:
+    """
+    Explicit, deterministic criteria determining when a goal is completed.
+    """
+    require_all_objectives: bool = True
+    required_objective_ids: Optional[Tuple[str, ...]] = None
+    min_completion_percentage: float = 100.0
+    user_confirmation_required: bool = False
+
+
+@dataclass(frozen=True)
+class GoalProgress:
+    """
+    Structured progress model with explicit semantics.
+    """
+    completed_objectives: int = 0
+    total_objectives: int = 0
+    percentage: float = 0.0
+    active_objective_id: Optional[str] = None
+    blockers: Tuple[str, ...] = field(default_factory=tuple)
+    last_update: float = field(default_factory=time.time)
+    progress_reason: str = ""
+
+
+@dataclass
+class Objective:
+    """
+    Bounded objective representing a concrete step towards achieving a Goal.
+    Does NOT contain raw cognitive traces.
+    """
+    objective_id: str
+    description: str
+    order: int = 1
+    dependencies: Tuple[str, ...] = field(default_factory=tuple)
+    status: ObjectiveStatus = ObjectiveStatus.PENDING
+    completion_criteria: Optional[str] = None
+    attempts: int = 0
+    max_attempts: int = 3
+    progress: float = 0.0
+    result_summary: Optional[str] = None
+    blocker_reason: Optional[str] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def is_terminal(self) -> bool:
+        """Check if objective is in a terminal state."""
+        return self.status in (
+            ObjectiveStatus.COMPLETED,
+            ObjectiveStatus.FAILED,
+            ObjectiveStatus.SKIPPED,
+            ObjectiveStatus.CANCELLED,
+        )
+
+    def is_ready(self, completed_objective_ids: Tuple[str, ...]) -> bool:
+        """Check if all prerequisite dependencies are completed."""
+        if self.status not in (ObjectiveStatus.PENDING, ObjectiveStatus.READY, ObjectiveStatus.PARTIAL):
+            return False
+        return all(dep in completed_objective_ids for dep in self.dependencies)
 
 
 @dataclass
 class Goal:
+    """
+    First-class goal domain model.
+    Encapsulates necessary state to pursue a goal across multiple cognitive turns.
+    Guarantees that original_goal remains strictly immutable.
+    Preserves backward compatibility for legacy callers.
+    """
+    original_goal: str = ""
+    goal_id: str = ""
+    objectives: Tuple[Objective, ...] = field(default_factory=tuple)
+    status: GoalStatus = GoalStatus.CREATED
+    constraints: GoalConstraints = field(default_factory=GoalConstraints)
+    completion_criteria: GoalCompletionCriteria = field(default_factory=GoalCompletionCriteria)
+    progress: GoalProgress = field(default_factory=GoalProgress)
+    active_objective_id: Optional[str] = None
+    created_at: float = field(default_factory=time.time)
+    updated_at: float = field(default_factory=time.time)
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
-    goal: str
-
+    # Legacy Phase 1 compatibility attributes
+    goal: str = ""
     priority: str = "normal"
-
-    status: str = "pending"
-
     confidence: float = 1.0
-
     reason: str = ""
-
     query: str = ""
+
+    def __post_init__(self):
+        # Support legacy Goal(goal="...") initialization
+        if not self.original_goal and self.goal:
+            super().__setattr__("original_goal", self.goal)
+        elif self.original_goal and not self.goal:
+            super().__setattr__("goal", self.original_goal)
+
+        if not self.goal_id:
+            super().__setattr__("goal_id", f"goal_{uuid.uuid4().hex[:10]}")
+
+        # Ensure status is GoalStatus enum
+        if isinstance(self.status, str) and not isinstance(self.status, GoalStatus):
+            try:
+                super().__setattr__("status", GoalStatus(self.status.lower()))
+            except ValueError:
+                super().__setattr__("status", GoalStatus.CREATED)
+
+        super().__setattr__("_initialized", True)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        # Enforce original_goal immutability invariant after initialization
+        if getattr(self, "_initialized", False):
+            if name in ("original_goal", "goal") and getattr(self, "original_goal", None) != value:
+                raise AttributeError("original_goal is strictly immutable and cannot be modified")
+        super().__setattr__(name, value)
+
+    def is_terminal(self) -> bool:
+        """Check if goal is in a terminal state."""
+        return self.status in (
+            GoalStatus.COMPLETED,
+            GoalStatus.FAILED,
+            GoalStatus.ABORTED,
+            GoalStatus.CANCELLED,
+        )
+
+    def get_objective(self, objective_id: str) -> Optional[Objective]:
+        """Find an objective by ID."""
+        for obj in self.objectives:
+            if obj.objective_id == objective_id:
+                return obj
+        return None
+
+    def get_completed_objective_ids(self) -> Tuple[str, ...]:
+        """Return tuple of completed objective IDs."""
+        return tuple(obj.objective_id for obj in self.objectives if obj.status == ObjectiveStatus.COMPLETED)
