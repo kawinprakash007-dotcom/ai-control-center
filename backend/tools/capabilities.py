@@ -3,7 +3,22 @@ from memory.history import get_history
 from memory.memory import get_memory
 
 
-def chat():
+def chat(task=None):
+    # If task parameters provide explicit query and history (from Phase 2 pipeline)
+    if task is not None and hasattr(task, "parameters") and isinstance(task.parameters, dict):
+        query = task.parameters.get("query")
+        history = task.parameters.get("history")
+        if query is not None:
+            print("\n[Chat Capability]")
+            print("Sending to Ollama:")
+            print(query)
+
+            response = ask_ollama(query, history=history)
+
+            print("\nOllama Response:")
+            print(response)
+
+            return response
 
     history = get_history()
 

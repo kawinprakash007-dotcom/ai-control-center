@@ -2,7 +2,6 @@ import os
 from brain.agent import Agent
 from brain.pipeline import StandardPipeline
 from brain.request_understanding import RequestUnderstandingError
-from memory.history import add_message, get_history
 
 # V1 Brain instance
 jarvis = Agent()
@@ -27,28 +26,14 @@ def process_message(message: str) -> str:
         return jarvis.think(message)
 
     # Phase 2 Primary Path
-    user_added = False
     try:
-        add_message("user", message)
-        user_added = True
-
         result = pipeline.process(message)
-
-        add_message("assistant", result.response)
         return result.response
 
     except RequestUnderstandingError:
-        if user_added:
-            history = get_history()
-            if history and history[-1].get("role") == "user" and history[-1].get("content") == message:
-                history.pop()
         raise
 
     except ValueError:
         # Pre-execution planning failure (e.g. unsupported capability in Phase 2 planner).
-        # Safe to fall back to V1 because Phase 2 execution never started.
-        if user_added:
-            history = get_history()
-            if history and history[-1].get("role") == "user" and history[-1].get("content") == message:
-                history.pop()
+        # Safe to fall back to V1 because Phase 2 execution never started and memory was not written.
         return jarvis.think(message)
