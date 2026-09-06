@@ -23,12 +23,13 @@ from brain.execution import StandardExecutionEngine
 from brain.verification import StandardVerifier
 from brain.response import StandardResponseComposer
 from memory.sqlite_store import SQLiteMemoryStore
+from runtime.cognitive_runtime import CognitiveRuntime
 
 
 class StandardPipeline(PipelineInterface):
     """
     Deterministic implementation of PipelineInterface.
-    Orchestrates the Phase 2 request lifecycle:
+    Orchestrates the Phase 2 & Phase 3 request lifecycle backed by CognitiveRuntime:
     Understanding -> Memory Read -> Decision -> Planning -> Execution -> Verification -> (Recovery) -> Response -> Memory Write.
     """
 
@@ -44,6 +45,7 @@ class StandardPipeline(PipelineInterface):
         web_provider: Optional[WebProviderInterface] = None,
         recovery_engine: Optional[RecoveryEngineInterface] = None,
         enable_recovery: bool = True,
+        runtime: Optional[CognitiveRuntime] = None,
     ):
         self.understanding = (
             understanding
@@ -92,6 +94,33 @@ class StandardPipeline(PipelineInterface):
                 self.recovery_engine = None
         else:
             self.recovery_engine = None
+
+        if runtime is not None:
+            self.runtime = runtime
+        else:
+            self.runtime = CognitiveRuntime(
+                understanding=self.understanding,
+                decision_engine=self.decision_engine,
+                planner=self.planner,
+                execution_engine=self.execution_engine,
+                verifier=self.verifier,
+                composer=self.composer,
+                memory_service=self.memory_service,
+                web_provider=self.web_provider,
+                recovery_engine=self.recovery_engine,
+            )
+
+    def _sync_runtime(self) -> None:
+        """Synchronize runtime component bindings with current pipeline attributes."""
+        self.runtime.understanding = self.understanding
+        self.runtime.decision_engine = self.decision_engine
+        self.runtime.planner = self.planner
+        self.runtime.execution_engine = self.execution_engine
+        self.runtime.verifier = self.verifier
+        self.runtime.composer = self.composer
+        self.runtime.memory_service = self.memory_service
+        self.runtime.web_provider = self.web_provider
+        self.runtime.recovery_engine = self.recovery_engine
 
     def _inject_context(
         self,
@@ -144,65 +173,12 @@ class StandardPipeline(PipelineInterface):
 
     def process(self, input_data: Any) -> PipelineResult:
         """
-        Execute the full Phase 2 lifecycle and return structured PipelineResult.
+        Execute the full cognitive turn lifecycle backed by CognitiveRuntime
+        and return structured PipelineResult for backward compatibility.
         """
-        request = self.understanding.understand(input_data)
-
-        # Memory Read: retrieve prior conversational history for this session
-        is_empty = bool(request.parameters.get("is_empty", False))
-        history_entries = []
-        if not is_empty:
-            history_entries = self.memory_service.get_history(request.session_id, limit=20)
-
-        decision = self.decision_engine.decide(request)
-        plan = self.planner.plan(decision)
-
-        def execute_fn(p: Plan) -> List[Result]:
-            return self._execute_plan(p, request, history_entries, is_empty)
-
-        recovery_context = None
-        if self.recovery_engine is not None:
-            plan, results, verification, recovery_context = self.recovery_engine.recover(
-                original_goal=request.original_text,
-                initial_plan=plan,
-                execute_fn=execute_fn,
-                verify_fn=self.verifier.verify,
-            )
-        else:
-            results = execute_fn(plan)
-            verification = self.verifier.verify(plan, results)
-
-        response = self.composer.compose(
-            request,
-            decision,
-            plan,
-            results,
-            verification,
-        )
-
-
-        # Memory Write: persist user turn and assistant response exactly once
-        if not is_empty:
-            self.memory_service.add_message(
-                session_id=request.session_id,
-                role=MessageRole.USER,
-                content=request.original_text,
-            )
-            self.memory_service.add_message(
-                session_id=request.session_id,
-                role=MessageRole.ASSISTANT,
-                content=response,
-            )
-
-        return PipelineResult(
-            response=response,
-            request=request,
-            decision=decision,
-            plan=plan,
-            results=results,
-            verification=verification,
-            recovery=recovery_context,
-        )
+        self._sync_runtime()
+        turn_result = self.runtime.execute_turn(input_data)
+        return turn_result.to_pipeline_result()
 
 
     def run(self, input_data: Any) -> str:

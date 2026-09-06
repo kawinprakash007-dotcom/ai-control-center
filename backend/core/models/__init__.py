@@ -107,6 +107,17 @@ from core.models.model_router import (
     ModelRequirements,
     RoutingResult,
 )
+from core.models.runtime import (
+    CognitiveStage,
+    TurnStatus,
+    CognitiveEventType,
+    CognitiveEvent,
+    CognitiveTrace,
+    TurnLimits,
+    CognitiveTurn,
+    CognitiveTurnResult,
+    sanitize_event_metadata,
+)
 
 __all__ = [
     "Request",
@@ -196,4 +207,13 @@ __all__ = [
     "ModelDescriptor",
     "ModelRequirements",
     "RoutingResult",
+    "CognitiveStage",
+    "TurnStatus",
+    "CognitiveEventType",
+    "CognitiveEvent",
+    "CognitiveTrace",
+    "TurnLimits",
+    "CognitiveTurn",
+    "CognitiveTurnResult",
+    "sanitize_event_metadata",
 ]

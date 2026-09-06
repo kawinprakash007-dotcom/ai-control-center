@@ -39,6 +39,10 @@ from core.interfaces.model_router_interface import (
     ModelRouterInterface,
 )
 from core.interfaces.context_interface import ContextManagerInterface
+from core.interfaces.runtime_interface import (
+    CognitiveEventSinkInterface,
+    CognitiveRuntimeInterface,
+)
 
 __all__ = [
     "BrainInterface",
@@ -64,4 +68,6 @@ __all__ = [
     "ModelProviderRegistryInterface",
     "ModelRouterInterface",
     "ContextManagerInterface",
+    "CognitiveEventSinkInterface",
+    "CognitiveRuntimeInterface",
 ]
