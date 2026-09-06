@@ -38,7 +38,12 @@ class Router:
 
         # 2. If task targets a whitelisted capability, route through orchestrator
         if tool_name and str(tool_name).strip().lower() in self.orchestrator.get_allowed_capabilities():
-            return self.orchestrator.execute_task(task)
+            from core.models.policy import PolicyContext
+            context = PolicyContext.from_tool_call(
+                ToolCall.from_task(task),
+                source="pipeline",
+            )
+            return self.orchestrator.execute_task(task, context=context)
 
         # 3. Legacy fallback for desktop tools or unconstrained task routing
         tool_function = self.registry.get_executor(tool_name)

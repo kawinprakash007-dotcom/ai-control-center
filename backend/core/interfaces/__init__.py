@@ -19,6 +19,7 @@ from core.interfaces.research_interface import (
     ResearchReasonerInterface,
     ResearchSynthesizerInterface,
 )
+from core.interfaces.policy_interface import PolicyEngineInterface
 
 __all__ = [
     "BrainInterface",
@@ -32,4 +33,5 @@ __all__ = [
     "WebProviderError",
     "ResearchReasonerInterface",
     "ResearchSynthesizerInterface",
+    "PolicyEngineInterface",
 ]

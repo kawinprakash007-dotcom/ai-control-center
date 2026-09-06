@@ -42,6 +42,13 @@ from core.models.research import (
     Contradiction,
 )
 from core.models.tool_call import ToolCall
+from core.models.policy import (
+    PolicyDecision,
+    AutonomyLevel,
+    RiskLevel,
+    PolicyContext,
+    PolicyResult,
+)
 
 __all__ = [
     "Request",
@@ -80,4 +87,9 @@ __all__ = [
     "ResearchGap",
     "Contradiction",
     "ToolCall",
+    "PolicyDecision",
+    "AutonomyLevel",
+    "RiskLevel",
+    "PolicyContext",
+    "PolicyResult",
 ]

@@ -4,6 +4,13 @@ from typing import Optional, Dict, Any, Set, Tuple, Union
 from core.models.tool_call import ToolCall
 from core.models.result import Result
 from core.models.task import Task
+from core.models.policy import (
+    PolicyDecision,
+    PolicyContext,
+    PolicyResult,
+    AutonomyLevel,
+)
+from core.interfaces.policy_interface import PolicyEngineInterface
 from tools.capability_registry import CapabilityRegistry
 from tools.executor import Executor
 
@@ -33,9 +40,9 @@ class ToolOrchestrator:
             ↓
         Action & Parameter Validation
             ↓
-        Authorization (Extension Point)
+        Policy & Permission Evaluation (StandardPolicyEngine)
             ↓
-        Capability Resolution
+        Capability Resolution (CapabilityRegistry)
             ↓
         Capability Execution via Executor
             ↓
@@ -47,6 +54,7 @@ class ToolOrchestrator:
         registry: Optional[CapabilityRegistry] = None,
         executor: Optional[Executor] = None,
         allowed_capabilities: Optional[Dict[str, Set[str]]] = None,
+        policy_engine: Optional[PolicyEngineInterface] = None,
     ):
         """
         Initialize ToolOrchestrator.
@@ -55,6 +63,7 @@ class ToolOrchestrator:
             registry: Optional CapabilityRegistry instance (defaults to standard CapabilityRegistry).
             executor: Optional Executor instance (defaults to standard Executor).
             allowed_capabilities: Optional whitelist mapping capability -> allowed actions set.
+            policy_engine: Optional PolicyEngineInterface implementation for authorization checks.
         """
         self.registry = registry if registry is not None else CapabilityRegistry()
         self.executor = executor if executor is not None else Executor()
@@ -63,6 +72,15 @@ class ToolOrchestrator:
             if allowed_capabilities is not None
             else {k: set(v) for k, v in DEFAULT_ALLOWED_CAPABILITIES.items()}
         )
+
+        if policy_engine is not None:
+            self.policy_engine = policy_engine
+        else:
+            try:
+                from safety.policy_engine import StandardPolicyEngine
+                self.policy_engine = StandardPolicyEngine()
+            except ImportError:
+                self.policy_engine = None
 
     def get_allowed_capabilities(self) -> Set[str]:
         """Return the set of currently allowed capability names."""
@@ -147,27 +165,46 @@ class ToolOrchestrator:
                 pass
 
         elif cap == "knowledge":
-            if act in ("query", "retrieve", "search"):
+            if act in ("query", "retrieve", "search", "retrieve knowledge", "retrieve_knowledge"):
                 q = params.get("query")
                 if not q or not isinstance(q, str) or not q.strip():
                     return False, "Knowledge query requires a non-empty 'query' string parameter."
 
         return True, None
 
-    def _check_authorization(self, tool_call: ToolCall) -> Tuple[bool, Optional[str]]:
+    def _check_authorization(
+        self,
+        tool_call: ToolCall,
+        context: Optional[PolicyContext] = None,
+    ) -> Tuple[bool, Optional[str]]:
         """
-        Authorization check extension point (Phase L).
-        Provides a clean boundary for future Policy Engine integration without
-        introducing premature mock authorization logic.
+        Authorization check helper using the policy engine.
+        Returns:
+            (is_authorized, reason_if_not)
         """
-        return True, None
+        if self.policy_engine is None:
+            return True, None
 
-    def execute(self, tool_call: Union[ToolCall, Dict[str, Any]]) -> Result:
+        effective_context = context or PolicyContext.from_tool_call(tool_call)
+        try:
+            res = self.policy_engine.evaluate(tool_call, effective_context)
+            if res.is_allowed:
+                return True, None
+            return False, f"[{res.rule_id}] {res.reason}"
+        except Exception as e:
+            return False, f"Policy evaluation error: {e}. Default deny enforced."
+
+    def execute(
+        self,
+        tool_call: Union[ToolCall, Dict[str, Any]],
+        context: Optional[PolicyContext] = None,
+    ) -> Result:
         """
-        Orchestrate validation, resolution, and execution of a ToolCall.
+        Orchestrate validation, policy evaluation, resolution, and execution of a ToolCall.
 
         Args:
             tool_call: ToolCall instance or dict representation.
+            context: Optional PolicyContext for authorization and autonomy checks.
 
         Returns:
             Result object carrying success status, output, structured data,
@@ -204,15 +241,62 @@ class ToolOrchestrator:
                 call_id=call_id,
             )
 
-        # Step 2: Authorization
-        is_authorized, auth_err = self._check_authorization(tool_call)
-        if not is_authorized:
-            return Result.fail(
-                message=auth_err or "Action unauthorized by runtime policy.",
-                capability=cap,
-                action=act,
-                call_id=call_id,
-            )
+        # Step 2: Policy & Permission Evaluation
+        if self.policy_engine is not None:
+            effective_context = context
+            if effective_context is None:
+                effective_context = PolicyContext.from_tool_call(tool_call)
+
+            try:
+                policy_result = self.policy_engine.evaluate(tool_call, effective_context)
+            except Exception as e:
+                # Default-deny guarantee on policy engine failure
+                return Result.fail(
+                    message=f"Policy evaluation error: {e}. Execution denied.",
+                    capability=cap,
+                    action=act,
+                    call_id=call_id,
+                    data={"policy_error": str(e), "decision": PolicyDecision.DENY.value},
+                )
+
+            if policy_result.decision == PolicyDecision.DENY:
+                return Result.fail(
+                    message=f"Execution denied by policy [{policy_result.rule_id}]: {policy_result.reason}",
+                    capability=cap,
+                    action=act,
+                    call_id=call_id,
+                    data={"policy_result": policy_result.to_dict()},
+                )
+
+            if policy_result.decision == PolicyDecision.ASK_PERMISSION:
+                return Result(
+                    success=False,
+                    message=f"Permission required for '{cap}.{act}' [{policy_result.rule_id}]: {policy_result.reason}",
+                    output=None,
+                    data={
+                        "policy_result": policy_result.to_dict(),
+                        "requires_permission": True,
+                        "explanation": policy_result.explanation,
+                    },
+                    capability=cap,
+                    action=act,
+                    call_id=call_id,
+                )
+
+            if policy_result.decision == PolicyDecision.REQUIRE_CONFIRMATION:
+                return Result(
+                    success=False,
+                    message=f"Confirmation required for '{cap}.{act}' [{policy_result.rule_id}]: {policy_result.reason}",
+                    output=None,
+                    data={
+                        "policy_result": policy_result.to_dict(),
+                        "requires_confirmation": True,
+                        "explanation": policy_result.explanation,
+                    },
+                    capability=cap,
+                    action=act,
+                    call_id=call_id,
+                )
 
         # Step 3: Capability Resolution
         capability_callable = self.registry.get_executor(cap) or self.registry.get(cap)
@@ -248,7 +332,6 @@ class ToolOrchestrator:
 
         try:
             raw_result = self.executor.execute(capability_callable, task)
-            duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
 
             return Result(
                 success=raw_result.success,
@@ -268,14 +351,14 @@ class ToolOrchestrator:
                 call_id=call_id,
             )
 
-    def execute_task(self, task: Task) -> Result:
+    def execute_task(self, task: Task, context: Optional[PolicyContext] = None) -> Result:
         """
         Execute a legacy Task object through the orchestrator.
         Translates Task to ToolCall and delegates to execute().
         """
         try:
             tool_call = ToolCall.from_task(task)
-            return self.execute(tool_call)
+            return self.execute(tool_call, context=context)
         except Exception as e:
             return Result.fail(
                 message=f"Failed to translate Task to ToolCall: {e}",
