@@ -31,6 +31,14 @@ class MockComputerBackend(ComputerBackendInterface):
         self.failure_message = "Mock device failure"
         self.screenshot_count = 0
 
+    @property
+    def click_count(self) -> int:
+        return len([h for h in self.history if h.get("action") in ("click", "double_click")])
+
+    @property
+    def cursor_pos(self) -> Tuple[int, int]:
+        return (self.cursor_x, self.cursor_y)
+
     def get_screen_dimensions(self) -> ScreenDimensions:
         return self.screen
 

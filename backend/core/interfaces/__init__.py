@@ -25,6 +25,11 @@ from core.interfaces.recovery_interface import (
     RecoveryEngineInterface,
 )
 from core.interfaces.computer_interface import ComputerBackendInterface
+from core.interfaces.perception_interface import (
+    VisualPerceptionProvider,
+    PerceptionEngineInterface,
+    TargetGrounderInterface,
+)
 
 __all__ = [
     "BrainInterface",
@@ -42,4 +47,7 @@ __all__ = [
     "RecoveryPlannerInterface",
     "RecoveryEngineInterface",
     "ComputerBackendInterface",
+    "VisualPerceptionProvider",
+    "PerceptionEngineInterface",
+    "TargetGrounderInterface",
 ]

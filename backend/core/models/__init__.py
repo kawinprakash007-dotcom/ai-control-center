@@ -66,6 +66,18 @@ from core.models.computer import (
     ComputerObservation,
     ALLOWED_SPECIAL_KEYS,
 )
+from core.models.perception import (
+    ElementType,
+    PerceptionSource,
+    SpatialRelation,
+    BoundingBox,
+    VisualElement,
+    VisualScene,
+    GroundingRequest,
+    GroundedTarget,
+    GroundingAmbiguity,
+    GroundingResult,
+)
 
 __all__ = [
     "Request",
@@ -122,4 +134,14 @@ __all__ = [
     "ComputerTarget",
     "ComputerObservation",
     "ALLOWED_SPECIAL_KEYS",
+    "ElementType",
+    "PerceptionSource",
+    "SpatialRelation",
+    "BoundingBox",
+    "VisualElement",
+    "VisualScene",
+    "GroundingRequest",
+    "GroundedTarget",
+    "GroundingAmbiguity",
+    "GroundingResult",
 ]

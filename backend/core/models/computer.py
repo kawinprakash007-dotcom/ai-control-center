@@ -99,9 +99,15 @@ class ComputerObservation:
     process_name: Optional[str] = None
     ui_tree_metadata: Dict[str, Any] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)
+    observation_id: Optional[str] = None
+
+    def __post_init__(self):
+        if not self.observation_id:
+            object.__setattr__(self, "observation_id", f"obs_{int(self.timestamp * 1000)}")
 
     def to_dict(self) -> Dict[str, Any]:
         return {
+            "observation_id": self.observation_id,
             "timestamp": self.timestamp,
             "dimensions": f"{self.screen_dimensions.width}x{self.screen_dimensions.height}",
             "screenshot_path": self.screenshot_path,
