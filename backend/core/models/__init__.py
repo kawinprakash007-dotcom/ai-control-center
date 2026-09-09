@@ -188,6 +188,20 @@ from core.models.anticipation import (
     Anticipation,
     AnticipatoryDecision,
 )
+from core.models.orchestration import (
+    ModalityType,
+    GeoLocation,
+    MultimodalObservation,
+    SituationCategory,
+    SituationSeverity,
+    SituationStatus,
+    SituationEvidence,
+    Situation,
+    DeviceType,
+    ConnectivityStatus,
+    DeviceCapabilityDescriptor,
+    DeviceIdentity,
+)
 
 __all__ = [
     "Request",
@@ -344,4 +358,16 @@ __all__ = [
     "AnticipationProvenance",
     "Anticipation",
     "AnticipatoryDecision",
+    "ModalityType",
+    "GeoLocation",
+    "MultimodalObservation",
+    "SituationCategory",
+    "SituationSeverity",
+    "SituationStatus",
+    "SituationEvidence",
+    "Situation",
+    "DeviceType",
+    "ConnectivityStatus",
+    "DeviceCapabilityDescriptor",
+    "DeviceIdentity",
 ]

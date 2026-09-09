@@ -17,6 +17,7 @@ class EventSource(str, Enum):
     COGNITIVE_EVENT = "COGNITIVE_EVENT"
     EXTERNAL = "EXTERNAL"
     USER = "USER"
+    SITUATION = "SITUATION"
 
 
 class EventPriority(IntEnum):
@@ -48,6 +49,7 @@ class EventCategory(str, Enum):
     GOAL_PROGRESS = "GOAL_PROGRESS"
     TIMEOUT = "TIMEOUT"
     EXTERNAL_SIGNAL = "EXTERNAL_SIGNAL"
+    SITUATION_DETECTED = "SITUATION_DETECTED"
     UNKNOWN = "UNKNOWN"
 
 

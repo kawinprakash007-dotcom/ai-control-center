@@ -68,6 +68,12 @@ from core.interfaces.anticipation_interface import (
     AnticipatoryAnalyzerInterface,
     AnticipatoryPlanningCoordinatorInterface,
 )
+from core.interfaces.orchestration_interface import (
+    CentralInputGatewayInterface,
+    SituationFusionInterface,
+    DeviceGatewayInterface,
+    DeviceAdapterInterface,
+)
 
 __all__ = [
     "BrainInterface",
@@ -112,4 +118,8 @@ __all__ = [
     "InvalidationEngineInterface",
     "AnticipatoryAnalyzerInterface",
     "AnticipatoryPlanningCoordinatorInterface",
+    "CentralInputGatewayInterface",
+    "SituationFusionInterface",
+    "DeviceGatewayInterface",
+    "DeviceAdapterInterface",
 ]
