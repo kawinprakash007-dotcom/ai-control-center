@@ -2,12 +2,15 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from core.models.orchestration import (
+    ConnectivityStatus,
     DeviceCapabilityDescriptor,
     DeviceIdentity,
+    DeviceType,
     ModalityType,
     MultimodalObservation,
     Situation,
 )
+from core.models.result import Result
 from core.models.tool_call import ToolCall
 
 
@@ -91,13 +94,48 @@ class DeviceGatewayInterface(ABC):
         pass
 
     @abstractmethod
+    def unregister_device(self, device_id: str) -> bool:
+        """Unregister an edge participant."""
+        pass
+
+    @abstractmethod
     def get_device(self, device_id: str) -> Optional[DeviceIdentity]:
         """Retrieve device identity by device_id."""
         pass
 
     @abstractmethod
-    def list_devices(self) -> Sequence[DeviceIdentity]:
-        """List all registered device identities."""
+    def list_devices(self, device_type: Optional[DeviceType] = None) -> Sequence[DeviceIdentity]:
+        """List all registered device identities, optionally filtered by type."""
+        pass
+
+    @abstractmethod
+    def update_device_status(
+        self,
+        device_id: str,
+        status: ConnectivityStatus,
+        timestamp: Optional[float] = None,
+    ) -> bool:
+        """Update operational connectivity status of a registered device."""
+        pass
+
+    @abstractmethod
+    def query_device_status(self, device_id: str, now: Optional[float] = None) -> ConnectivityStatus:
+        """Query semantic connectivity status of a registered device."""
+        pass
+
+    @abstractmethod
+    def list_device_capabilities(self, device_id: str) -> Sequence[DeviceCapabilityDescriptor]:
+        """List declared capability descriptors of a registered device."""
+        pass
+
+    @abstractmethod
+    def register_adapter(
+        self,
+        adapter: "DeviceAdapterInterface",
+        device_type: Optional[DeviceType] = None,
+        device_id: Optional[str] = None,
+    ) -> None:
+        """Register a protocol adapter for a device type or specific device."""
         pass
 
     @abstractmethod
@@ -108,13 +146,30 @@ class DeviceGatewayInterface(ABC):
         """
         pass
 
+    @abstractmethod
+    def dispatch_to_device(
+        self,
+        device_id: str,
+        capability: str,
+        action: str,
+        parameters: Dict[str, Any],
+        dispatch_id: Optional[str] = None,
+        correlation_id: str = "",
+        causation_id: Optional[str] = None,
+        now: Optional[float] = None,
+    ) -> Result:
+        """
+        Validate capability/action/parameters and route command to the registered adapter.
+        """
+        pass
+
 
 class DeviceAdapterInterface(ABC):
     """
     Protocol and transport translation boundary for edge devices.
 
     CRITICAL ARCHITECTURAL RULES:
-    1. Translates model-neutral ToolCalls into device-specific payloads.
+    1. Translates model-neutral ToolCalls or semantic commands into device-specific payloads.
     2. NEVER directly triggered by CognitiveRuntime; only invoked via ToolOrchestrator boundary.
     """
 
@@ -128,5 +183,12 @@ class DeviceAdapterInterface(ABC):
         """
         Translate a ToolCall into a device-specific payload representation.
         Pure translation; does not perform network transmission in model layer.
+        """
+        pass
+
+    @abstractmethod
+    def execute_command(self, command: Any) -> Result:
+        """
+        Execute a semantic DeviceCommand on the underlying transport/virtual device.
         """
         pass

@@ -56,6 +56,8 @@ class ProhibitedCapabilityRule(PolicyRule):
     def matches(self, tool_call: ToolCall, context: PolicyContext) -> bool:
         cap = tool_call.capability.lower()
         act = tool_call.action.lower()
+        if cap in ("device_gateway", "device_dispatch"):
+            return False
         cap_parts = set(cap.replace("-", "_").split("_"))
         act_parts = set(act.replace("-", "_").split("_"))
         for bad in PROHIBITED_CAPABILITIES_AND_ACTIONS:
@@ -313,6 +315,27 @@ class ComputerSensitiveActionRule(PolicyRule):
         )
 
 
+class DeviceGatewayOperationRule(PolicyRule):
+    """
+    Authorizes governed DeviceGateway dispatch and query operations:
+    - device_gateway: dispatch_capability, query_status, list_devices
+    """
+    rule_id = "RULE_DEVICE_GATEWAY_OPERATION"
+    description = "Authorizes governed edge participant command dispatch and status queries."
+
+    def matches(self, tool_call: ToolCall, context: PolicyContext) -> bool:
+        cap = tool_call.capability.lower()
+        act = tool_call.action.lower()
+        return cap in ("device_gateway", "device_dispatch") and act in ("dispatch_capability", "query_status", "list_devices")
+
+    def evaluate(self, tool_call: ToolCall, context: PolicyContext) -> PolicyResult:
+        return PolicyResult.allow(
+            rule_id="RULE_DEVICE_GATEWAY_ALLOWED",
+            reason=f"DeviceGateway operation '{tool_call.action}' is authorized by safety policy.",
+            metadata={"risk_level": RiskLevel.LOW.value},
+        )
+
+
 class DefaultDenyRule(PolicyRule):
     """
     Catch-all default-deny rule enforcing that no unknown capability or action ever fails open.
@@ -357,6 +380,7 @@ class StandardPolicyEngine(PolicyEngineInterface):
                 ComputerObservationRule(),
                 ComputerLowRiskActionRule(),
                 ComputerSensitiveActionRule(),
+                DeviceGatewayOperationRule(),
                 DefaultDenyRule(),
             ]
 

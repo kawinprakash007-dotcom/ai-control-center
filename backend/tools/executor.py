@@ -39,6 +39,9 @@ class Executor:
             else:
                 output = tool_function()
 
+            if isinstance(output, Result):
+                return output
+
             data = None
             if hasattr(tool_function, "last_research_result") and getattr(tool_function, "last_research_result", None) is not None:
                 data = getattr(tool_function, "last_research_result", None)

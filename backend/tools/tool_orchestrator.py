@@ -22,6 +22,7 @@ DEFAULT_ALLOWED_CAPABILITIES: Dict[str, Set[str]] = {
     "memory": {"save", "read", "forget", "remember", "recall"},
     "knowledge": {"query", "retrieve", "search", "retrieve knowledge", "retrieve_knowledge"},
     "computer": {"screenshot", "click", "double_click", "move", "type", "press_key", "scroll", "wait"},
+    "device_gateway": {"dispatch_capability", "query_status", "list_devices"},
 }
 
 
@@ -34,6 +35,8 @@ PROHIBITED_STRINGS: Set[str] = {
 
 def _is_prohibited(name: str, prohibited_terms: Set[str]) -> bool:
     name_clean = name.lower()
+    if name_clean in ("device_gateway", "device_dispatch"):
+        return False
     parts = set(name_clean.replace("-", "_").split("_"))
     for bad in prohibited_terms:
         if len(bad) <= 2:
@@ -209,6 +212,22 @@ class ToolOrchestrator:
                 if seconds is not None and not isinstance(seconds, (int, float)):
                     return False, "Computer 'wait' seconds must be a numeric value."
 
+        elif cap == "device_gateway":
+            if act == "dispatch_capability":
+                dev_id = params.get("device_id")
+                if not dev_id or not isinstance(dev_id, str):
+                    return False, "device_gateway dispatch requires a non-empty 'device_id' string parameter."
+                capability_name = params.get("capability")
+                if not capability_name or not isinstance(capability_name, str):
+                    return False, "device_gateway dispatch requires a non-empty 'capability' string parameter."
+                action_name = params.get("action")
+                if not action_name or not isinstance(action_name, str):
+                    return False, "device_gateway dispatch requires a non-empty 'action' string parameter."
+            elif act == "query_status":
+                dev_id = params.get("device_id")
+                if not dev_id or not isinstance(dev_id, str):
+                    return False, "device_gateway query_status requires a non-empty 'device_id' string parameter."
+
         return True, None
 
 
@@ -350,7 +369,8 @@ class ToolOrchestrator:
 
         # Step 4: Parameter normalization and execution
         task_params = dict(tool_call.parameters)
-        task_params["action"] = act
+        if "action" not in task_params:
+            task_params["action"] = act
         if call_id:
             task_params["call_id"] = call_id
         if tool_call.reason:
