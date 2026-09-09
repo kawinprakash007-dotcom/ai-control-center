@@ -35,6 +35,22 @@ class CentralInputGatewayInterface(ABC):
         """Retrieve recent observations filtered by modality if specified."""
         pass
 
+    def receive_envelope(self, envelope: Any, now: Optional[float] = None) -> Any:
+        """Receive, validate, and normalize an IngressEnvelope."""
+        raise NotImplementedError
+
+    def ingest_batch(
+        self,
+        envelopes: Sequence[Any],
+        now: Optional[float] = None,
+    ) -> Sequence[Any]:
+        """Bounded batch ingestion of envelopes or observations."""
+        raise NotImplementedError
+
+    def get_metrics(self) -> Any:
+        """Query gateway operational counters and status."""
+        raise NotImplementedError
+
 
 class SituationFusionInterface(ABC):
     """
