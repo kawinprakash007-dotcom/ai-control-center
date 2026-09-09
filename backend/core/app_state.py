@@ -41,6 +41,8 @@ from orchestration.virtual_devices import (
     VirtualRoverAdapter,
     VirtualVisionAdapter,
 )
+from perception.registry import PerceptionProviderRegistry
+from perception.normalizer import PerceptionObservationNormalizer
 
 logger = logging.getLogger("atlas.runtime")
 
@@ -83,6 +85,10 @@ class AtlasApplicationState:
     # Multi-Product Situation & Mission Intelligence (Phase 6.4)
     situation_intelligence: Optional[Any] = None
     mission_coordinator: Optional[Any] = None
+
+    # Multimodal Perception Contracts (Phase 6.5a)
+    perception_registry: Optional[PerceptionProviderRegistry] = None
+    perception_normalizer: Optional[PerceptionObservationNormalizer] = None
 
     # Bounded ThreadPool for CPU/LLM offloading (prevent event loop starvation)
     executor: Optional[ThreadPoolExecutor] = None
@@ -244,6 +250,10 @@ def initialize_application_state(
 
     app_state.situation_intelligence = sit_intel
     app_state.mission_coordinator = m_coord
+
+    # 13b. Multimodal Perception Contracts (Phase 6.5a)
+    app_state.perception_registry = PerceptionProviderRegistry()
+    app_state.perception_normalizer = PerceptionObservationNormalizer()
 
     # 14. Register Simulation Devices if enabled
     if cfg.is_simulation():

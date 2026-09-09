@@ -1,10 +1,12 @@
+from perception.accessibility_provider import AccessibilityPerceptionProvider
+from perception.cv_provider import CVPerceptionProvider
+from perception.deduplicator import deduplicate_elements
 from perception.engine import VisualPerceptionEngine
 from perception.grounder import TargetGrounder
-from perception.ocr_provider import OCRPerceptionProvider
-from perception.cv_provider import CVPerceptionProvider
-from perception.accessibility_provider import AccessibilityPerceptionProvider
 from perception.mock_provider import MockPerceptionProvider
-from perception.deduplicator import deduplicate_elements
+from perception.normalizer import PerceptionObservationNormalizer
+from perception.ocr_provider import OCRPerceptionProvider
+from perception.registry import PerceptionProviderRegistry
 
 __all__ = [
     "VisualPerceptionEngine",
@@ -13,5 +15,7 @@ __all__ = [
     "CVPerceptionProvider",
     "AccessibilityPerceptionProvider",
     "MockPerceptionProvider",
+    "PerceptionProviderRegistry",
+    "PerceptionObservationNormalizer",
     "deduplicate_elements",
 ]

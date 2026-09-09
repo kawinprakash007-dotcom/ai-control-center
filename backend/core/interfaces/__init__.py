@@ -29,6 +29,9 @@ from core.interfaces.perception_interface import (
     VisualPerceptionProvider,
     PerceptionEngineInterface,
     TargetGrounderInterface,
+    PerceptionProviderInterface,
+    PerceptionProviderRegistryInterface,
+    PerceptionObservationNormalizerInterface,
 )
 from core.interfaces.reasoning_interface import (
     ReasoningProviderInterface,
@@ -106,6 +109,9 @@ __all__ = [
     "VisualPerceptionProvider",
     "PerceptionEngineInterface",
     "TargetGrounderInterface",
+    "PerceptionProviderInterface",
+    "PerceptionProviderRegistryInterface",
+    "PerceptionObservationNormalizerInterface",
     "ReasoningProviderInterface",
     "ActionProposalValidatorInterface",
     "ModelProviderRegistryInterface",
