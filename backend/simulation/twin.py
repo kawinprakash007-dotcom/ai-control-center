@@ -200,6 +200,16 @@ class BaseDigitalTwin(DigitalTwinInterface):
         with self._lock:
             self._simulation_status = status
 
+    def update_battery(self, battery_pct: float) -> None:
+        """Update twin battery percentage."""
+        with self._lock:
+            self._battery = max(0.0, min(100.0, float(battery_pct)))
+
+    def update_position(self, position: Optional[TwinPosition]) -> None:
+        """Update twin 3D spatial position."""
+        with self._lock:
+            self._position = position
+
     def get_simulation_status(self) -> TwinSimulationStatus:
         """Get the current simulation execution status."""
         with self._lock:
