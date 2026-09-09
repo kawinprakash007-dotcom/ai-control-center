@@ -24,6 +24,12 @@ class Result:
     action: Optional[str] = None
     call_id: Optional[str] = None
 
+    @property
+    def error_code(self) -> Optional[str]:
+        if isinstance(self.data, dict):
+            return self.data.get("error_code")
+        return None
+
     @classmethod
     def ok(
         cls,
@@ -53,13 +59,38 @@ class Result:
         capability: Optional[str] = None,
         action: Optional[str] = None,
         call_id: Optional[str] = None,
+        error_code: Optional[str] = None,
     ) -> "Result":
+        payload = data or {}
+        if error_code and isinstance(payload, dict):
+            payload["error_code"] = error_code
         return cls(
             success=False,
+            message=message,
+            output=output,
+            data=payload if payload else None,
+            capability=capability,
+            action=action,
+            call_id=call_id,
+        )
+
+    @classmethod
+    def failure(
+        cls,
+        message: str,
+        output: Optional[str] = None,
+        data: Any = None,
+        capability: Optional[str] = None,
+        action: Optional[str] = None,
+        call_id: Optional[str] = None,
+        error_code: Optional[str] = None,
+    ) -> "Result":
+        return cls.fail(
             message=message,
             output=output,
             data=data,
             capability=capability,
             action=action,
             call_id=call_id,
+            error_code=error_code,
         )

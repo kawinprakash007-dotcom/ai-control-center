@@ -218,6 +218,16 @@ from core.models.device_contract import (
     DeviceTelemetry,
     DeviceContract,
 )
+from core.models.simulation import (
+    TwinSimulationStatus,
+    TwinFaultType,
+    SimulationLimits,
+    TwinPosition,
+    TwinConfiguration,
+    TwinFault,
+    TwinTelemetry,
+    TwinState,
+)
 
 __all__ = [
     "Request",
@@ -400,4 +410,12 @@ __all__ = [
     "DeviceCommandResult",
     "DeviceTelemetry",
     "DeviceContract",
+    "TwinSimulationStatus",
+    "TwinFaultType",
+    "SimulationLimits",
+    "TwinPosition",
+    "TwinConfiguration",
+    "TwinFault",
+    "TwinTelemetry",
+    "TwinState",
 ]

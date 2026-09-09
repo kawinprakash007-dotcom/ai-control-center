@@ -74,6 +74,12 @@ from core.interfaces.orchestration_interface import (
     DeviceGatewayInterface,
     DeviceAdapterInterface,
 )
+from core.interfaces.simulation_interface import (
+    SimulationClockInterface,
+    DigitalTwinInterface,
+    SimulationWorldInterface,
+    ScenarioRunnerInterface,
+)
 
 __all__ = [
     "BrainInterface",
@@ -122,4 +128,8 @@ __all__ = [
     "SituationFusionInterface",
     "DeviceGatewayInterface",
     "DeviceAdapterInterface",
+    "SimulationClockInterface",
+    "DigitalTwinInterface",
+    "SimulationWorldInterface",
+    "ScenarioRunnerInterface",
 ]
