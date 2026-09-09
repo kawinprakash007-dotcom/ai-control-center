@@ -716,6 +716,12 @@ class DeviceCapabilityDescriptor:
     is_reversible: bool = False
     requires_confirmation: bool = False
     rate_limit_hz: Optional[float] = None
+    capability_id: str = ""
+    description: str = ""
+    supported_actions: Tuple[str, ...] = ()
+    schema_version: str = "1.0"
+    semantic_constraints: Optional[Dict[str, Any]] = None
+    expected_result_category: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
@@ -723,6 +729,13 @@ class DeviceCapabilityDescriptor:
             raise ValueError("DeviceCapabilityDescriptor capability_name must be a non-empty string.")
         if not self.action_name or not isinstance(self.action_name, str):
             raise ValueError("DeviceCapabilityDescriptor action_name must be a non-empty string.")
+
+        cap_id = self.capability_id if self.capability_id else self.capability_name
+        object.__setattr__(self, "capability_id", cap_id)
+
+        actions = tuple(self.supported_actions) if self.supported_actions else (self.action_name,)
+        object.__setattr__(self, "supported_actions", actions)
+
         if self.rate_limit_hz is not None:
             rl = float(self.rate_limit_hz)
             if rl <= 0.0:
@@ -730,13 +743,26 @@ class DeviceCapabilityDescriptor:
             object.__setattr__(self, "rate_limit_hz", rl)
         if self.parameters_schema is not None:
             object.__setattr__(self, "parameters_schema", dict(self.parameters_schema))
+        if self.semantic_constraints is not None:
+            object.__setattr__(self, "semantic_constraints", dict(self.semantic_constraints))
         if self.metadata is not None:
             object.__setattr__(self, "metadata", dict(self.metadata))
+
+    def supports_action(self, action: str) -> bool:
+        """Check if action is in the declared supported actions or matches action_name."""
+        norm = str(action or "").strip().lower()
+        if norm == self.action_name.strip().lower():
+            return True
+        return any(a.strip().lower() == norm for a in self.supported_actions)
 
     def to_dict(self) -> Dict[str, Any]:
         data: Dict[str, Any] = {
             "capability_name": self.capability_name,
             "action_name": self.action_name,
+            "capability_id": self.capability_id,
+            "description": self.description,
+            "supported_actions": list(self.supported_actions),
+            "schema_version": self.schema_version,
             "is_reversible": self.is_reversible,
             "requires_confirmation": self.requires_confirmation,
         }
@@ -744,19 +770,32 @@ class DeviceCapabilityDescriptor:
             data["parameters_schema"] = dict(self.parameters_schema)
         if self.rate_limit_hz is not None:
             data["rate_limit_hz"] = self.rate_limit_hz
+        if self.semantic_constraints:
+            data["semantic_constraints"] = dict(self.semantic_constraints)
+        if self.expected_result_category is not None:
+            data["expected_result_category"] = self.expected_result_category
         if self.metadata:
             data["metadata"] = dict(self.metadata)
         return data
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "DeviceCapabilityDescriptor":
+        act = data.get("action_name") or (data.get("supported_actions", ["default"])[0] if data.get("supported_actions") else "default")
+        cap = data.get("capability_name") or data.get("capability_id") or "default"
+        supported = tuple(data.get("supported_actions", [])) if data.get("supported_actions") else (act,)
         return cls(
-            capability_name=data["capability_name"],
-            action_name=data["action_name"],
+            capability_name=cap,
+            action_name=act,
             parameters_schema=dict(data.get("parameters_schema", {})) if data.get("parameters_schema") else None,
             is_reversible=bool(data.get("is_reversible", False)),
             requires_confirmation=bool(data.get("requires_confirmation", False)),
             rate_limit_hz=float(data["rate_limit_hz"]) if data.get("rate_limit_hz") is not None else None,
+            capability_id=data.get("capability_id", cap),
+            description=data.get("description", ""),
+            supported_actions=supported,
+            schema_version=data.get("schema_version", "1.0"),
+            semantic_constraints=dict(data.get("semantic_constraints", {})) if data.get("semantic_constraints") else None,
+            expected_result_category=data.get("expected_result_category"),
             metadata=dict(data.get("metadata", {})),
         )
 
@@ -771,6 +810,7 @@ class DeviceIdentity:
     - GPIO pins / registers / memory offsets
     - MAVLink / ROS2 / ESP32 register specifics
     - Direct hardware drivers
+    - Passwords, secrets, or API keys
     """
     device_id: str
     device_type: DeviceType
@@ -782,6 +822,11 @@ class DeviceIdentity:
     registered_at: float = field(default_factory=time.time)
     last_heartbeat: Optional[float] = None
     connectivity_status: ConnectivityStatus = ConnectivityStatus.UNKNOWN
+    product_type: Optional[Any] = None
+    product_role: Optional[Any] = None
+    vendor: Optional[str] = None
+    model: Optional[str] = None
+    contract_version: str = "1.0"
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
@@ -815,6 +860,34 @@ class DeviceIdentity:
                 raise ValueError(f"DeviceIdentity last_heartbeat must be non-negative, got {hb}")
             object.__setattr__(self, "last_heartbeat", hb)
 
+        # Infer ProductType if not provided
+        pt = self.product_type
+        if pt is None:
+            if dt == DeviceType.DRONE_AERIAL:
+                pt = "DRONE"
+            elif dt == DeviceType.ROBOT_GROUND:
+                pt = "ROVER"
+            elif dt == DeviceType.SMART_GLASSES:
+                pt = "GLASS"
+            elif dt == DeviceType.STATIONARY_SENSOR:
+                pt = "VISION"
+            else:
+                pt = "UNKNOWN"
+        if hasattr(pt, "value"):
+            pt = pt.value
+        object.__setattr__(self, "product_type", str(pt).upper())
+
+        # Infer ProductRole if not provided
+        pr = self.product_role
+        if pr is None:
+            if str(self.product_type) == "VISION":
+                pr = "OBSERVATION_SOURCE"
+            else:
+                pr = "HYBRID"
+        if hasattr(pr, "value"):
+            pr = pr.value
+        object.__setattr__(self, "product_role", str(pr).upper())
+
         # Capabilities as immutable tuple
         caps = []
         if self.capabilities:
@@ -835,12 +908,21 @@ class DeviceIdentity:
 
     def has_capability(self, capability_name: str) -> bool:
         """Check if device declares a specific capability."""
-        return any(c.capability_name == capability_name for c in self.capabilities)
+        norm = capability_name.strip().lower()
+        return any(
+            c.capability_name.strip().lower() == norm
+            or getattr(c, "capability_id", "").strip().lower() == norm
+            for c in self.capabilities
+        )
 
     def get_capability(self, capability_name: str) -> Optional[DeviceCapabilityDescriptor]:
         """Retrieve capability descriptor by name if declared."""
+        norm = capability_name.strip().lower()
         for c in self.capabilities:
-            if c.capability_name == capability_name:
+            if (
+                c.capability_name.strip().lower() == norm
+                or getattr(c, "capability_id", "").strip().lower() == norm
+            ):
                 return c
         return None
 
@@ -849,10 +931,20 @@ class DeviceIdentity:
         return self.connectivity_status == ConnectivityStatus.ONLINE
 
     def to_dict(self) -> Dict[str, Any]:
+        # Filter sensitive credentials from metadata
+        _bad = {"password", "secret", "token", "credential", "api_key", "private_key", "auth"}
+        clean_meta = {
+            k: ("[REDACTED]" if any(b in k.lower() for b in _bad) else v)
+            for k, v in self.metadata.items()
+        } if self.metadata else {}
+
         data: Dict[str, Any] = {
             "device_id": self.device_id,
             "device_type": self.device_type.value,
             "display_name": self.display_name,
+            "product_type": self.product_type,
+            "product_role": self.product_role,
+            "contract_version": self.contract_version,
             "is_simulation": self.is_simulation,
             "registered_at": self.registered_at,
             "connectivity_status": self.connectivity_status.value,
@@ -860,12 +952,16 @@ class DeviceIdentity:
         }
         if self.firmware_version is not None:
             data["firmware_version"] = self.firmware_version
+        if self.vendor is not None:
+            data["vendor"] = self.vendor
+        if self.model is not None:
+            data["model"] = self.model
         if self.home_location is not None:
             data["home_location"] = self.home_location.to_dict()
         if self.last_heartbeat is not None:
             data["last_heartbeat"] = self.last_heartbeat
-        if self.metadata:
-            data["metadata"] = dict(self.metadata)
+        if clean_meta:
+            data["metadata"] = clean_meta
         return data
 
     @classmethod
@@ -885,5 +981,35 @@ class DeviceIdentity:
             registered_at=float(data.get("registered_at", time.time())),
             last_heartbeat=float(data["last_heartbeat"]) if data.get("last_heartbeat") is not None else None,
             connectivity_status=ConnectivityStatus.from_str(data.get("connectivity_status", "UNKNOWN")),
+            product_type=data.get("product_type"),
+            product_role=data.get("product_role"),
+            vendor=data.get("vendor"),
+            model=data.get("model"),
+            contract_version=data.get("contract_version", "1.0"),
             metadata=dict(data.get("metadata", {})),
         )
+
+
+# ============================================================================
+# Re-exports from Phase 6.2 Device Contract Layer
+# ============================================================================
+
+try:
+    from core.models.device_contract import (
+        AcknowledgementStatus,
+        CommandState,
+        DeviceCommandAcknowledgement,
+        DeviceCommandRequest,
+        DeviceCommandResult,
+        DeviceContract,
+        DeviceError,
+        DeviceErrorCode,
+        DeviceHealth,
+        DeviceHealthStatus,
+        DeviceHeartbeat,
+        DeviceTelemetry,
+        ProductRole,
+        ProductType,
+    )
+except ImportError:
+    pass

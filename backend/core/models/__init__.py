@@ -202,6 +202,22 @@ from core.models.orchestration import (
     DeviceCapabilityDescriptor,
     DeviceIdentity,
 )
+from core.models.device_contract import (
+    ProductType,
+    ProductRole,
+    CommandState,
+    AcknowledgementStatus,
+    DeviceHealthStatus,
+    DeviceErrorCode,
+    DeviceError,
+    DeviceHeartbeat,
+    DeviceHealth,
+    DeviceCommandRequest,
+    DeviceCommandAcknowledgement,
+    DeviceCommandResult,
+    DeviceTelemetry,
+    DeviceContract,
+)
 
 __all__ = [
     "Request",
@@ -370,4 +386,18 @@ __all__ = [
     "ConnectivityStatus",
     "DeviceCapabilityDescriptor",
     "DeviceIdentity",
+    "ProductType",
+    "ProductRole",
+    "CommandState",
+    "AcknowledgementStatus",
+    "DeviceHealthStatus",
+    "DeviceErrorCode",
+    "DeviceError",
+    "DeviceHeartbeat",
+    "DeviceHealth",
+    "DeviceCommandRequest",
+    "DeviceCommandAcknowledgement",
+    "DeviceCommandResult",
+    "DeviceTelemetry",
+    "DeviceContract",
 ]

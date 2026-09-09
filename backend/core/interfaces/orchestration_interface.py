@@ -193,6 +193,30 @@ class DeviceAdapterInterface(ABC):
         """
         pass
 
+    def connect(self, device_id: str = "") -> bool:
+        """Establish or verify logical connectivity to the device."""
+        return True
+
+    def disconnect(self, device_id: str = "") -> bool:
+        """Gracefully terminate logical session to the device."""
+        return True
+
+    def get_health(self, device_id: str = "") -> Any:
+        """Query semantic health assessment of the device adapter."""
+        return None
+
+    def get_status(self, device_id: str = "") -> ConnectivityStatus:
+        """Query operational connectivity status."""
+        return ConnectivityStatus.ONLINE
+
+    def get_capabilities(self, device_id: str = "") -> Sequence[DeviceCapabilityDescriptor]:
+        """Query capabilities declared or provided by this adapter."""
+        return ()
+
+    def heartbeat(self, device_id: str = "") -> Any:
+        """Generate or record an adapter-level heartbeat beacon."""
+        return None
+
 
 class CentralOrchestratorInterface(ABC):
     """

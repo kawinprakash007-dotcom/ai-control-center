@@ -35,9 +35,11 @@ from orchestration.virtual_devices import (
     create_virtual_drone,
     create_virtual_glass,
     create_virtual_rover,
+    create_virtual_vision,
     VirtualDroneAdapter,
     VirtualGlassAdapter,
     VirtualRoverAdapter,
+    VirtualVisionAdapter,
 )
 
 logger = logging.getLogger("atlas.runtime")
@@ -228,14 +230,17 @@ def initialize_application_state(
     # 13. Register Simulation Devices if enabled
     if cfg.is_simulation():
         logger.info("Initializing Virtual Edge Devices in Simulation Mode...")
+        vision, vision_adapter = create_virtual_vision("ATLAS_VISION_01")
         drone, drone_adapter = create_virtual_drone("ATLAS_DRONE_01")
         glass, glass_adapter = create_virtual_glass("ATLAS_GLASS_01")
         rover, rover_adapter = create_virtual_rover("ATLAS_ROVER_01")
 
+        device_gw.register_device(vision)
         device_gw.register_device(drone)
         device_gw.register_device(glass)
         device_gw.register_device(rover)
 
+        device_gw.register_adapter(vision_adapter, device_id="ATLAS_VISION_01")
         device_gw.register_adapter(drone_adapter, device_id="ATLAS_DRONE_01")
         device_gw.register_adapter(glass_adapter, device_id="ATLAS_GLASS_01")
         device_gw.register_adapter(rover_adapter, device_id="ATLAS_ROVER_01")
