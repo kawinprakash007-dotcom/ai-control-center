@@ -61,4 +61,14 @@ __all__ = [
     "create_virtual_drone",
     "create_virtual_glass",
     "create_virtual_rover",
+    # Phase 5.0e Central Orchestration Integration
+    "CentralOrchestrationConfig",
+    "CentralOrchestrator",
+    "CentralOrchestratorResult",
 ]
+
+from orchestration.central_orchestration import (
+    CentralOrchestrationConfig,
+    CentralOrchestrator,
+    CentralOrchestratorResult,
+)

@@ -479,12 +479,15 @@ class CognitiveRuntime(CognitiveRuntimeInterface):
 
                 policy_blocked = False
                 for step in plan.steps:
-                    tc = ToolCall(
-                        capability=getattr(step, "tool", None) or getattr(step, "type", "tool"),
-                        action=getattr(step, "type", "execute"),
-                        parameters=getattr(step, "parameters", {}) or {},
-                        call_id=f"call_{turn.turn_id}_{getattr(step, 'id', 1)}",
-                    )
+                    if isinstance(step, ToolCall):
+                        tc = step
+                    else:
+                        tc = ToolCall(
+                            capability=getattr(step, "capability", None) or getattr(step, "tool", None) or getattr(step, "type", "tool"),
+                            action=getattr(step, "action", None) or getattr(step, "type", "execute"),
+                            parameters=getattr(step, "parameters", {}) or {},
+                            call_id=getattr(step, "call_id", f"call_{turn.turn_id}_{getattr(step, 'id', 1)}"),
+                        )
                     p_ctx = PolicyContext(
                         capability=tc.capability,
                         action=tc.action,

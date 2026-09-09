@@ -56,6 +56,13 @@ class VirtualDroneAdapter(DeviceAdapterInterface):
         observations: List[MultimodalObservation] = []
 
         if action == "takeoff":
+            if self.battery_pct <= 5.0:
+                return Result.fail(
+                    message=f"Drone '{self.device_id}' cannot takeoff: battery too low ({self.battery_pct:.1f}%).",
+                    capability=command.capability,
+                    action=action,
+                    call_id=command.dispatch_id,
+                )
             target_alt = float(params.get("target_altitude", 10.0))
             self.armed = True
             self.airborne = True
@@ -391,6 +398,10 @@ class VirtualGlassAdapter(DeviceAdapterInterface):
         self.battery_pct = 100.0
         self.connectivity = ConnectivityStatus.ONLINE
 
+    @property
+    def hud_message(self) -> str:
+        return self.display_text
+
     def get_protocol_name(self) -> str:
         return "simulated_glass"
 
@@ -407,13 +418,13 @@ class VirtualGlassAdapter(DeviceAdapterInterface):
         observations: List[MultimodalObservation] = []
 
         if action == "display_hud":
-            text = str(params.get("text", ""))
+            text = str(params.get("text") or params.get("message") or "")
             self.display_text = text
             self.battery_pct = max(0.0, self.battery_pct - 0.5)
 
             return Result.ok(
                 message=f"Glass '{self.device_id}' HUD updated with '{text}'.",
-                data={"display_text": text},
+                data={"display_text": text, "message": text},
                 capability=command.capability,
                 action=action,
                 call_id=command.dispatch_id,

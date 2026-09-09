@@ -597,6 +597,9 @@ class DeviceGateway(DeviceGatewayInterface):
             )
 
         # 8. Record result
+        if isinstance(res.data, dict) and "correlation_id" not in res.data and command.correlation_id:
+            res.data["correlation_id"] = command.correlation_id
+
         with self._lock:
             self._dispatch_results[effective_dispatch_id] = res
 

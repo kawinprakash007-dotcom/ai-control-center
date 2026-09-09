@@ -259,6 +259,10 @@ class InMemoryGoalStore(GoalStoreInterface):
                     break
             return results
 
+    def get_all_goals(self) -> List[Goal]:
+        """Return all stored goals."""
+        return self.list_goals(limit=10000)
+
     def delete_goal(self, goal_id: str) -> bool:
         with self._lock:
             if goal_id in self._goals:
@@ -490,3 +494,7 @@ class SQLiteGoalStore(GoalStoreInterface):
                 cursor = conn.execute("DELETE FROM goals WHERE goal_id = ?", (goal_id,))
                 conn.commit()
                 return cursor.rowcount > 0
+
+    def get_all_goals(self) -> List[Goal]:
+        """Return all stored goals."""
+        return self.list_goals(limit=10000)

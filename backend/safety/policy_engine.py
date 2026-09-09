@@ -1,5 +1,6 @@
+import uuid
 from abc import ABC, abstractmethod
-from typing import Optional, List, Dict, Any, Set
+from typing import Optional, List, Dict, Any, Set, Union
 
 from core.models.tool_call import ToolCall
 from core.models.policy import (
@@ -336,6 +337,33 @@ class DeviceGatewayOperationRule(PolicyRule):
         )
 
 
+class GoalLifecycleOperationRule(PolicyRule):
+    """
+    Authorizes governed Goal lifecycle operations:
+    - goal: create_goal, update_goal, pause_goal, resume_goal, cancel_goal
+    """
+    rule_id = "RULE_GOAL_LIFECYCLE_OPERATION"
+    description = "Authorizes governed goal lifecycle management operations."
+
+    def matches(self, tool_call: ToolCall, context: PolicyContext) -> bool:
+        cap = tool_call.capability.lower()
+        act = tool_call.action.lower()
+        return cap == "goal" and act in (
+            "create_goal",
+            "update_goal",
+            "pause_goal",
+            "resume_goal",
+            "cancel_goal",
+        )
+
+    def evaluate(self, tool_call: ToolCall, context: PolicyContext) -> PolicyResult:
+        return PolicyResult.allow(
+            rule_id="RULE_GOAL_LIFECYCLE_ALLOWED",
+            reason=f"Goal lifecycle operation '{tool_call.action}' is authorized by safety policy.",
+            metadata={"risk_level": RiskLevel.LOW.value},
+        )
+
+
 class DefaultDenyRule(PolicyRule):
     """
     Catch-all default-deny rule enforcing that no unknown capability or action ever fails open.
@@ -380,6 +408,7 @@ class StandardPolicyEngine(PolicyEngineInterface):
                 ComputerObservationRule(),
                 ComputerLowRiskActionRule(),
                 ComputerSensitiveActionRule(),
+                GoalLifecycleOperationRule(),
                 DeviceGatewayOperationRule(),
                 DefaultDenyRule(),
             ]
@@ -387,32 +416,39 @@ class StandardPolicyEngine(PolicyEngineInterface):
 
     def evaluate(
         self,
-        tool_call: ToolCall,
+        tool_call: Union[ToolCall, PolicyContext],
         context: Optional[PolicyContext] = None,
     ) -> PolicyResult:
         """
-        Evaluate proposed ToolCall against deterministic rules.
+        Evaluate proposed ToolCall or PolicyContext against deterministic rules.
         Never fails open.
         """
-        # Type integrity check
-        if not isinstance(tool_call, ToolCall):
+        # Support PolicyContext passed directly as first parameter
+        if isinstance(tool_call, PolicyContext):
+            effective_context = tool_call
+            tool_call = ToolCall(
+                capability=effective_context.capability,
+                action=effective_context.action,
+                parameters=dict(effective_context.parameters),
+                call_id=effective_context.call_id or f"call_{uuid.uuid4().hex[:8]}",
+            )
+        elif not isinstance(tool_call, ToolCall):
             return PolicyResult.deny(
                 rule_id="RULE_INVALID_TOOL_CALL",
                 reason=f"Expected ToolCall instance, got {type(tool_call).__name__}.",
                 metadata={"risk_level": RiskLevel.CRITICAL.value},
             )
-
-        # Context resolution
-        effective_context = context
-        if effective_context is None:
-            try:
-                effective_context = PolicyContext.from_tool_call(tool_call)
-            except Exception as e:
-                return PolicyResult.deny(
-                    rule_id="RULE_INVALID_CONTEXT",
-                    reason=f"Failed to resolve PolicyContext: {e}. Default deny enforced.",
-                    metadata={"risk_level": RiskLevel.CRITICAL.value},
-                )
+        else:
+            effective_context = context
+            if effective_context is None:
+                try:
+                    effective_context = PolicyContext.from_tool_call(tool_call)
+                except Exception as e:
+                    return PolicyResult.deny(
+                        rule_id="RULE_INVALID_CONTEXT",
+                        reason=f"Failed to resolve PolicyContext: {e}. Default deny enforced.",
+                        metadata={"risk_level": RiskLevel.CRITICAL.value},
+                    )
 
         if not isinstance(effective_context, PolicyContext):
             return PolicyResult.deny(

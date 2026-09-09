@@ -88,7 +88,7 @@ class StandardVerifier(VerificationInterface):
             )
 
         # Rule 8: Successful completion
-        all_tasks_completed = all(getattr(t, "status", None) == "completed" for t in plan.steps)
+        all_tasks_completed = all(getattr(t, "status", "completed") == "completed" for t in plan.steps)
         all_results_successful = all(getattr(r, "success", False) is True for r in results)
         consistent_result_count = (len(results) == len(plan.steps))
 

@@ -192,3 +192,37 @@ class DeviceAdapterInterface(ABC):
         Execute a semantic DeviceCommand on the underlying transport/virtual device.
         """
         pass
+
+
+class CentralOrchestratorInterface(ABC):
+    """
+    Contract for Central Orchestration Coordinator (Phase 5.0e).
+    Coordinates ingress, situation fusion, world state updates, event autonomy,
+    goal management, cognitive runtime turns, and device gateway dispatch.
+
+    CRITICAL BOUNDARIES:
+    - Pure integration coordinator; does NOT contain duplicate reasoning/planners/policy engines.
+    - Preserves all authority boundaries across CognitiveRuntime, PolicyEngine, ToolOrchestrator,
+      AutonomousGoalManager, and WorldState.
+    - Enforces bounded cycles, loop protection, and full causal lineage.
+    """
+
+    @abstractmethod
+    def process_ingress(
+        self,
+        data: Any,
+        correlation_id: Optional[str] = None,
+        causation_id: Optional[str] = None,
+        now: Optional[float] = None,
+    ) -> Any:
+        """Process ingress message through central orchestration pipeline."""
+        pass
+
+    @abstractmethod
+    def run_cycle(
+        self,
+        ingress_batch: Sequence[Any],
+        now: Optional[float] = None,
+    ) -> Any:
+        """Run bounded orchestration cycle over an ingress batch."""
+        pass

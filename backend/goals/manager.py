@@ -2,7 +2,7 @@ import logging
 import threading
 import time
 import uuid
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 from core.interfaces.goal_interface import (
     AutonomousGoalManagerInterface,
@@ -11,7 +11,7 @@ from core.interfaces.goal_interface import (
     GoalStoreInterface,
 )
 from core.interfaces.runtime_interface import CognitiveEventSinkInterface
-from core.models.goal import Goal, GoalStatus
+from core.models.goal import Goal, GoalConstraints, GoalStatus
 from core.models.goal_management import (
     GoalFreshnessStatus,
     GoalManagementState,
@@ -255,12 +255,37 @@ class AutonomousGoalManager(AutonomousGoalManagerInterface):
     # GOAL LIFECYCLE CONTROLS
     # ------------------------------------------------------------------------
 
-    def create_goal(self, goal: Goal) -> Goal:
+    def create_goal(
+        self,
+        goal: Optional[Union[Goal, str]] = None,
+        *,
+        title: Optional[str] = None,
+        description: Optional[str] = None,
+        priority: Union[GoalPriority, str] = GoalPriority.NORMAL,
+        constraints: Optional[GoalConstraints] = None,
+        correlation_id: Optional[str] = None,
+        causation_id: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Goal:
         """
         Create and persist a new goal under management authority.
         Emits CognitiveEventType.GOAL_CREATED with structured metadata.
+        Supports passing either a Goal instance or individual parameters.
         """
         with self._lock:
+            if not isinstance(goal, Goal):
+                goal_text = title or description or (goal if isinstance(goal, str) else "Autonomous Goal")
+                meta = dict(kwargs.get("metadata", {}))
+                if correlation_id:
+                    meta["correlation_id"] = correlation_id
+                if causation_id:
+                    meta["causation_id"] = causation_id
+                goal = Goal(
+                    original_goal=goal_text,
+                    priority=priority,
+                    constraints=constraints or GoalConstraints(),
+                    metadata=meta,
+                )
             created = self.store.create_goal(goal)
             self._publish_event(
                 event_type=CognitiveEventType.GOAL_CREATED,

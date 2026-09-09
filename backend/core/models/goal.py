@@ -179,6 +179,26 @@ class Goal:
             GoalStatus.CANCELLED,
         )
 
+    @property
+    def id(self) -> str:
+        return self.goal_id
+
+    @property
+    def title(self) -> str:
+        return self.original_goal
+
+    @property
+    def description(self) -> str:
+        return self.original_goal
+
+    @property
+    def correlation_id(self) -> str:
+        return self.metadata.get("correlation_id", "") if self.metadata else ""
+
+    @property
+    def causation_id(self) -> str:
+        return self.metadata.get("causation_id", "") if self.metadata else ""
+
     def get_objective(self, objective_id: str) -> Optional[Objective]:
         """Find an objective by ID."""
         for obj in self.objectives:
