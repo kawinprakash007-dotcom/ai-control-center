@@ -1,7 +1,7 @@
 from collections import defaultdict
 import logging
 import threading
-from typing import Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from core.interfaces.runtime_interface import CognitiveEventSinkInterface
 from core.models.runtime import CognitiveEvent
@@ -19,7 +19,13 @@ class InMemoryEventSink(CognitiveEventSinkInterface):
         self._max_events = max_events_per_turn
         self._events: List[CognitiveEvent] = []
         self._by_turn: Dict[str, List[CognitiveEvent]] = defaultdict(list)
+        self._subscribers: List[Any] = []
         self._lock = threading.Lock()
+
+    def subscribe(self, callback: Any) -> None:
+        """Register a subscriber callback for published events."""
+        with self._lock:
+            self._subscribers.append(callback)
 
     def publish(self, event: CognitiveEvent) -> None:
         """Publish and store a structured cognitive event within bounded limits."""
@@ -36,6 +42,12 @@ class InMemoryEventSink(CognitiveEventSinkInterface):
                     event.turn_id,
                     event.event_type.value,
                 )
+            callbacks = list(self._subscribers)
+        for cb in callbacks:
+            try:
+                cb(event)
+            except Exception as e:
+                logger.debug("Error in event sink subscriber: %s", e)
 
     def get_events(self, turn_id: Optional[str] = None) -> List[CognitiveEvent]:
         """Return a copy of events, optionally filtered by turn_id."""

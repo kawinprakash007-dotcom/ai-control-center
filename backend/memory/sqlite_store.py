@@ -39,8 +39,11 @@ class SQLiteMemoryStore(MemoryServiceInterface):
         self._init_schema()
 
     def _get_connection(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(str(self.db_path))
+        conn = sqlite3.connect(str(self.db_path), timeout=15.0, check_same_thread=False)
         conn.execute("PRAGMA foreign_keys = ON;")
+        conn.execute("PRAGMA busy_timeout = 5000;")
+        if str(self.db_path) != ":memory:":
+            conn.execute("PRAGMA journal_mode = WAL;")
         return conn
 
     def _init_schema(self) -> None:
