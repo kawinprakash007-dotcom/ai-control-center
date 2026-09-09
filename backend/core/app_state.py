@@ -80,6 +80,10 @@ class AtlasApplicationState:
     cognitive_runtime: Optional[CognitiveRuntime] = None
     central_orchestrator: Optional[CentralOrchestrator] = None
 
+    # Multi-Product Situation & Mission Intelligence (Phase 6.4)
+    situation_intelligence: Optional[Any] = None
+    mission_coordinator: Optional[Any] = None
+
     # Bounded ThreadPool for CPU/LLM offloading (prevent event loop starvation)
     executor: Optional[ThreadPoolExecutor] = None
 
@@ -227,7 +231,21 @@ def initialize_application_state(
         config=CentralOrchestrationConfig(),
     )
 
-    # 13. Register Simulation Devices if enabled
+    # 13. Multi-Product Situation & Mission Intelligence (Phase 6.4)
+    from mission.situation_intelligence import MultiProductSituationIntelligenceEngine
+    from mission.coordinator import MissionCoordinator
+    from mission.planner import MissionPlanner
+    from mission.role_selector import ProductRoleSelector
+
+    sit_intel = MultiProductSituationIntelligenceEngine()
+    role_sel = ProductRoleSelector()
+    m_planner = MissionPlanner(role_selector=role_sel)
+    m_coord = MissionCoordinator(goal_manager=app_state.goal_manager, planner=m_planner)
+
+    app_state.situation_intelligence = sit_intel
+    app_state.mission_coordinator = m_coord
+
+    # 14. Register Simulation Devices if enabled
     if cfg.is_simulation():
         logger.info("Initializing Virtual Edge Devices in Simulation Mode...")
         vision, vision_adapter = create_virtual_vision("ATLAS_VISION_01")

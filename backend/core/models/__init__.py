@@ -228,6 +228,20 @@ from core.models.simulation import (
     TwinTelemetry,
     TwinState,
 )
+from core.models.mission import (
+    MissionStatus,
+    MissionObjectiveType,
+    ObjectiveStatus,
+    EntityCorrelationStatus,
+    MissionLimits,
+    ProductEvidence,
+    SituationContradiction,
+    EntityCorrelation,
+    MultiProductSituation,
+    MissionObjective,
+    MissionTimelineEntry,
+    Mission,
+)
 
 __all__ = [
     "Request",
@@ -418,4 +432,16 @@ __all__ = [
     "TwinFault",
     "TwinTelemetry",
     "TwinState",
+    "MissionStatus",
+    "MissionObjectiveType",
+    "ObjectiveStatus",
+    "EntityCorrelationStatus",
+    "MissionLimits",
+    "ProductEvidence",
+    "SituationContradiction",
+    "EntityCorrelation",
+    "MultiProductSituation",
+    "MissionObjective",
+    "MissionTimelineEntry",
+    "Mission",
 ]

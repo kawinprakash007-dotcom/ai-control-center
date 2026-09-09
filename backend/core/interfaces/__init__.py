@@ -80,6 +80,12 @@ from core.interfaces.simulation_interface import (
     SimulationWorldInterface,
     ScenarioRunnerInterface,
 )
+from core.interfaces.mission_interface import (
+    MultiProductSituationIntelligenceInterface,
+    ProductRoleSelectorInterface,
+    MissionPlannerInterface,
+    MissionCoordinatorInterface,
+)
 
 __all__ = [
     "BrainInterface",
@@ -132,4 +138,8 @@ __all__ = [
     "DigitalTwinInterface",
     "SimulationWorldInterface",
     "ScenarioRunnerInterface",
+    "MultiProductSituationIntelligenceInterface",
+    "ProductRoleSelectorInterface",
+    "MissionPlannerInterface",
+    "MissionCoordinatorInterface",
 ]
