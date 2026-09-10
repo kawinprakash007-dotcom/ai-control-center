@@ -45,6 +45,36 @@ class StandardPlanner(DecisionPlannerInterface):
 
         # 2. SINGLE_STEP Execution Mode
         if decision.execution_mode == ExecutionMode.SINGLE_STEP:
+            if decision.primary_goal in (
+                "query_device_state",
+                "query_world_state",
+                "query_situation_state",
+                "query_mission_state",
+            ):
+                params = self._extract_task_parameters(decision)
+                action_name = {
+                    "query_device_state": "Query Device State",
+                    "query_world_state": "Query World State",
+                    "query_situation_state": "Query Situation State",
+                    "query_mission_state": "Query Mission State",
+                }.get(decision.primary_goal, "Query Live State")
+                task_type = {
+                    "query_device_state": "device",
+                    "query_world_state": "world",
+                    "query_situation_state": "situation",
+                    "query_mission_state": "mission",
+                }.get(decision.primary_goal, "device")
+                task = Task(
+                    id=1,
+                    type=task_type,
+                    action=action_name,
+                    tool="live_state",
+                    parameters=params,
+                    status="pending",
+                )
+                plan.steps.append(task)
+                return plan
+
             if decision.primary_goal == "retrieve_knowledge":
                 params = self._extract_task_parameters(decision)
                 task = Task(
@@ -58,15 +88,37 @@ class StandardPlanner(DecisionPlannerInterface):
                 plan.steps.append(task)
                 return plan
 
+            if decision.primary_goal == "computer_app" or (
+                decision.primary_goal == "execute_tool" and decision.routing_hints.get("tool_hint") == "computer_app"
+            ):
+                params = self._extract_task_parameters(decision)
+                act_raw = params.get("action", "launch")
+                canonical_act = str(act_raw).strip().lower()
+                params["action"] = canonical_act
+                if "app_id" not in params and "target" in params:
+                    params["app_id"] = params["target"]
+                task = Task(
+                    id=1,
+                    type="computer_app",
+                    action=f"Computer App {canonical_act.capitalize()}",
+                    tool="computer_app",
+                    parameters=params,
+                    status="pending",
+                )
+                plan.steps.append(task)
+                return plan
+
             if decision.primary_goal in ("computer_action", "computer_use") or (
                 decision.primary_goal == "execute_tool" and decision.routing_hints.get("tool_hint") == "computer"
             ):
                 params = self._extract_task_parameters(decision)
                 act_raw = params.get("action", "screenshot")
+                canonical_act = str(act_raw).strip().lower()
+                params["action"] = canonical_act
                 task = Task(
                     id=1,
                     type="computer",
-                    action=f"Computer {str(act_raw).capitalize()}",
+                    action=f"Computer {canonical_act.capitalize()}",
                     tool="computer",
                     parameters=params,
                     status="pending",
@@ -258,6 +310,7 @@ class StandardPlanner(DecisionPlannerInterface):
             "seconds",
             "button",
             "target",
+            "app_id",
         ):
             if key in decision.routing_hints:
                 params[key] = decision.routing_hints[key]

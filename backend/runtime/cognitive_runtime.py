@@ -83,7 +83,22 @@ class CognitiveRuntime(CognitiveRuntimeInterface):
         web_provider: Optional[WebProviderInterface] = None,
         event_sink: Optional[CognitiveEventSinkInterface] = None,
         limits: Optional[TurnLimits] = None,
+        device_gateway: Optional[Any] = None,
+        world_store: Optional[Any] = None,
+        situation_engine: Optional[Any] = None,
+        goal_manager: Optional[Any] = None,
+        live_state_capability: Optional[Any] = None,
+        demo_mode: Optional[bool] = None,
     ):
+        if demo_mode is None:
+            try:
+                from config.settings import get_settings
+                self.demo_mode = get_settings().demo_mode
+            except Exception:
+                self.demo_mode = False
+        else:
+            self.demo_mode = bool(demo_mode)
+
         # Default component wiring matching standard architecture
         if understanding is None:
             from brain.request_understanding import StandardRequestUnderstanding
@@ -93,9 +108,11 @@ class CognitiveRuntime(CognitiveRuntimeInterface):
 
         if decision_engine is None:
             from brain.decision_engine import StandardDecisionEngine
-            self.decision_engine = StandardDecisionEngine()
+            self.decision_engine = StandardDecisionEngine(demo_mode=self.demo_mode)
         else:
             self.decision_engine = decision_engine
+            if hasattr(self.decision_engine, "demo_mode"):
+                self.decision_engine.demo_mode = self.demo_mode
 
         if planner is None:
             from brain.planning import StandardPlanner
@@ -103,9 +120,14 @@ class CognitiveRuntime(CognitiveRuntimeInterface):
         else:
             self.planner = planner
 
+        self.policy_engine = policy_engine
+
         if execution_engine is None:
             from brain.execution import StandardExecutionEngine
-            self.execution_engine = StandardExecutionEngine()
+            self.execution_engine = StandardExecutionEngine(
+                policy_engine=self.policy_engine,
+                demo_mode=self.demo_mode,
+            )
         else:
             self.execution_engine = execution_engine
 
@@ -131,10 +153,59 @@ class CognitiveRuntime(CognitiveRuntimeInterface):
         self.context_manager = context_manager
         self.model_router = model_router
         self.reasoning_engine = reasoning_engine
-        self.policy_engine = policy_engine
         self.recovery_engine = recovery_engine
         self.event_sink = event_sink or InMemoryEventSink()
         self.limits = limits or TurnLimits()
+
+        self.device_gateway = device_gateway
+        self.world_store = world_store
+        self.situation_engine = situation_engine
+        self.goal_manager = goal_manager
+
+        from tools.live_state_capability import LiveStateCapability
+        self.live_state_capability = live_state_capability or LiveStateCapability(
+            device_gateway=device_gateway,
+            world_store=world_store,
+            situation_engine=situation_engine,
+            goal_manager=goal_manager,
+        )
+
+        # Wire live_state and synchronize orchestrator / policy engine in router
+        if hasattr(self.execution_engine, "router"):
+            router = self.execution_engine.router
+            if hasattr(router, "registry") and hasattr(router.registry, "register"):
+                router.registry.register("live_state", self.live_state_capability)
+
+            if hasattr(router, "orchestrator") and router.orchestrator is not None:
+                orch = router.orchestrator
+                if self.policy_engine is not None and getattr(orch, "policy_engine", None) is None:
+                    orch.policy_engine = self.policy_engine
+                if self.demo_mode:
+                    if hasattr(orch, "allowed_capabilities"):
+                        orch.allowed_capabilities["computer_app"] = {"launch", "close", "focus"}
+                    if hasattr(orch, "demo_mode"):
+                        orch.demo_mode = True
+                    if hasattr(orch, "policy_engine") and orch.policy_engine is not None:
+                        if hasattr(orch.policy_engine, "demo_mode"):
+                            orch.policy_engine.demo_mode = True
+                        if hasattr(orch.policy_engine, "rules"):
+                            if not any(r.rule_id == "RULE_DEMO_APP_LAUNCH" for r in orch.policy_engine.rules):
+                                from safety.policy_engine import DemoApplicationLaunchPolicyRule
+                                orch.policy_engine.rules.insert(len(orch.policy_engine.rules) - 1, DemoApplicationLaunchPolicyRule(demo_mode=True))
+
+            if self.demo_mode:
+                if hasattr(router, "registry") and hasattr(router.registry, "register"):
+                    from computer.demo_app_capability import DemoAppCapability
+                    if not router.registry.has_capability("computer_app"):
+                        router.registry.register("computer_app", DemoAppCapability())
+
+        if self.demo_mode and self.policy_engine is not None:
+            if hasattr(self.policy_engine, "demo_mode"):
+                self.policy_engine.demo_mode = True
+            if hasattr(self.policy_engine, "rules"):
+                if not any(r.rule_id == "RULE_DEMO_APP_LAUNCH" for r in self.policy_engine.rules):
+                    from safety.policy_engine import DemoApplicationLaunchPolicyRule
+                    self.policy_engine.rules.insert(len(self.policy_engine.rules) - 1, DemoApplicationLaunchPolicyRule(demo_mode=True))
 
     def _publish_event(
         self,
@@ -225,6 +296,15 @@ class CognitiveRuntime(CognitiveRuntimeInterface):
                 params = dict(step.parameters) if step.parameters else {}
                 if "web_provider" not in params and self.web_provider is not None:
                     params["web_provider"] = self.web_provider
+                step.parameters = params
+            elif step_type in ("device", "world", "situation", "mission") or step_tool == "live_state":
+                params = dict(step.parameters) if step.parameters else {}
+                if "query" not in params:
+                    params["query"] = request.original_text
+                if "target_device" not in params and "target_device" in request.parameters:
+                    params["target_device"] = request.parameters["target_device"]
+                if "query_type" not in params and "query_type" in request.parameters:
+                    params["query_type"] = request.parameters["query_type"]
                 step.parameters = params
 
     def execute_turn(
@@ -481,6 +561,8 @@ class CognitiveRuntime(CognitiveRuntimeInterface):
                 for step in plan.steps:
                     if isinstance(step, ToolCall):
                         tc = step
+                    elif hasattr(ToolCall, "from_task") and hasattr(step, "tool"):
+                        tc = ToolCall.from_task(step)
                     else:
                         tc = ToolCall(
                             capability=getattr(step, "capability", None) or getattr(step, "tool", None) or getattr(step, "type", "tool"),
@@ -546,13 +628,20 @@ class CognitiveRuntime(CognitiveRuntimeInterface):
                 self._inject_context(p, request, history_entries, is_empty)
                 results = self.execution_engine.execute(p)
                 for r in results:
+                    meta = {"success": r.success, "output_preview": str(r.output)[:100] if r.output else None}
+                    if getattr(r, "capability", None) == "computer_app" or (isinstance(getattr(r, "data", None), dict) and r.data.get("demo_mode")):
+                        meta["demo_mode"] = True
+                        if isinstance(r.data, dict):
+                            for k in ("application_id", "display_name", "action", "result", "timestamp"):
+                                if k in r.data:
+                                    meta[k] = r.data[k]
                     self._publish_event(
                         turn=turn,
                         event_type=CognitiveEventType.TOOL_EXECUTED,
                         stage=CognitiveStage.EXECUTION,
                         status="OK" if r.success else "FAILED",
                         summary=r.message or "Tool executed",
-                        metadata={"success": r.success, "output_preview": str(r.output)[:100] if r.output else None},
+                        metadata=meta,
                     )
                 return results
 

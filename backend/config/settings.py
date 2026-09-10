@@ -22,6 +22,11 @@ class AtlasSettings(BaseModel):
     api_auth_token: str = Field(default_factory=lambda: os.getenv("API_AUTH_TOKEN", "atlas_dev_secret_token"))
     simulation_mode: bool = Field(default_factory=lambda: os.getenv("SIMULATION_MODE", "true").lower() in ("true", "1", "yes"))
     replay_mode: bool = Field(default_factory=lambda: os.getenv("REPLAY_MODE", "false").lower() in ("true", "1", "yes"))
+    atlas_demo_mode: bool = Field(default_factory=lambda: os.getenv("ATLAS_DEMO_MODE", "false").lower() in ("true", "1", "yes"))
+
+    @property
+    def demo_mode(self) -> bool:
+        return self.atlas_demo_mode
 
     # Configured trusted CORS origins (no unrestricted wildcard origin with credentials)
     cors_origins_raw: str = Field(

@@ -73,6 +73,7 @@ class ToolOrchestrator:
         executor: Optional[Executor] = None,
         allowed_capabilities: Optional[Dict[str, Set[str]]] = None,
         policy_engine: Optional[PolicyEngineInterface] = None,
+        demo_mode: Optional[bool] = None,
     ):
         """
         Initialize ToolOrchestrator.
@@ -82,7 +83,17 @@ class ToolOrchestrator:
             executor: Optional Executor instance (defaults to standard Executor).
             allowed_capabilities: Optional whitelist mapping capability -> allowed actions set.
             policy_engine: Optional PolicyEngineInterface implementation for authorization checks.
+            demo_mode: Optional boolean flag. If None, checks get_settings().demo_mode.
         """
+        if demo_mode is None:
+            try:
+                from config.settings import get_settings
+                self.demo_mode = get_settings().demo_mode
+            except Exception:
+                self.demo_mode = False
+        else:
+            self.demo_mode = bool(demo_mode)
+
         self.registry = registry if registry is not None else CapabilityRegistry()
         self.executor = executor if executor is not None else Executor()
         self.allowed_capabilities: Dict[str, Set[str]] = (
@@ -91,12 +102,21 @@ class ToolOrchestrator:
             else {k: set(v) for k, v in DEFAULT_ALLOWED_CAPABILITIES.items()}
         )
 
+        if self.demo_mode:
+            self.allowed_capabilities["computer_app"] = {"launch", "close", "focus"}
+            if not self.registry.has_capability("computer_app"):
+                try:
+                    from computer.demo_app_capability import DemoAppCapability
+                    self.registry.register("computer_app", DemoAppCapability())
+                except Exception:
+                    pass
+
         if policy_engine is not None:
             self.policy_engine = policy_engine
         else:
             try:
                 from safety.policy_engine import StandardPolicyEngine
-                self.policy_engine = StandardPolicyEngine()
+                self.policy_engine = StandardPolicyEngine(demo_mode=self.demo_mode)
             except ImportError:
                 self.policy_engine = None
 
@@ -227,6 +247,16 @@ class ToolOrchestrator:
                 dev_id = params.get("device_id")
                 if not dev_id or not isinstance(dev_id, str):
                     return False, "device_gateway query_status requires a non-empty 'device_id' string parameter."
+
+        elif cap == "computer_app":
+            if act not in ("launch", "close", "focus"):
+                return False, f"Action '{act}' is not permitted for 'computer_app'. Allowed actions: launch, close, focus."
+            app_id = params.get("app_id") or params.get("app") or params.get("application")
+            if not app_id or not isinstance(app_id, str):
+                return False, "computer_app requires a non-empty string 'app_id' parameter."
+            prohibited_keys = {"executable", "path", "command", "cmd", "shell", "exec", "script", "args", "arguments", "cli", "binary", "filename"}
+            if any(k in params for k in prohibited_keys):
+                return False, "Custom executable paths and command lines are strictly forbidden for computer_app."
 
         return True, None
 

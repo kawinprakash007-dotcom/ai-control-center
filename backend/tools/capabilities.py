@@ -1,6 +1,15 @@
+import sys
 from llm.ollama_client import ask_ollama
 from memory.history import get_history
 from memory.memory import get_memory
+
+
+def _safe_print(text: str) -> None:
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        enc = getattr(sys.stdout, "encoding", "utf-8") or "utf-8"
+        print(str(text).encode(enc, errors="replace").decode(enc))
 
 
 def chat(task=None):
@@ -9,14 +18,14 @@ def chat(task=None):
         query = task.parameters.get("query")
         history = task.parameters.get("history")
         if query is not None:
-            print("\n[Chat Capability]")
-            print("Sending to Ollama:")
-            print(query)
+            _safe_print("\n[Chat Capability]")
+            _safe_print("Sending to Ollama:")
+            _safe_print(query)
 
             response = ask_ollama(query, history=history)
 
-            print("\nOllama Response:")
-            print(response)
+            _safe_print("\nOllama Response:")
+            _safe_print(response)
 
             return response
 
@@ -28,14 +37,14 @@ def chat(task=None):
 
         if msg["role"] == "user":
 
-            print("\n[Chat Capability]")
-            print("Sending to Ollama:")
-            print(msg["content"])
+            _safe_print("\n[Chat Capability]")
+            _safe_print("Sending to Ollama:")
+            _safe_print(msg["content"])
 
             response = ask_ollama(msg["content"])
 
-            print("\nOllama Response:")
-            print(response)
+            _safe_print("\nOllama Response:")
+            _safe_print(response)
 
             return response
 

@@ -254,6 +254,13 @@ from core.models.mission import (
     MissionTimelineEntry,
     Mission,
 )
+from core.models.live_context import (
+    ChatQueryClassification,
+    LiveDeviceContext,
+    LiveWorldContext,
+    LiveSituationContext,
+    LiveMissionContext,
+)
 
 __all__ = [
     "Request",
@@ -468,4 +475,9 @@ __all__ = [
     "PerceptionEvidence",
     "PerceptionRequest",
     "PerceptionResult",
+    "ChatQueryClassification",
+    "LiveDeviceContext",
+    "LiveWorldContext",
+    "LiveSituationContext",
+    "LiveMissionContext",
 ]

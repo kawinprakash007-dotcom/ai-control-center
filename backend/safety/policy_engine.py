@@ -57,7 +57,7 @@ class ProhibitedCapabilityRule(PolicyRule):
     def matches(self, tool_call: ToolCall, context: PolicyContext) -> bool:
         cap = tool_call.capability.lower()
         act = tool_call.action.lower()
-        if cap in ("device_gateway", "device_dispatch"):
+        if cap in ("device_gateway", "device_dispatch", "live_state"):
             return False
         cap_parts = set(cap.replace("-", "_").split("_"))
         act_parts = set(act.replace("-", "_").split("_"))
@@ -188,6 +188,16 @@ class SafeReadAndSearchRule(PolicyRule):
         "web": {"search", "fetch", "research"},
         "knowledge": {"query", "retrieve", "search", "retrieve knowledge", "retrieve_knowledge"},
         "memory": {"read", "recall"},
+        "live_state": {
+            "query_device_state", "query device state",
+            "query_world_state", "query world state",
+            "query_situation_state", "query situation state",
+            "query_mission_state", "query mission state",
+            "read", "query",
+        },
+        "device_gateway": {
+            "query_status", "get_health", "list_devices", "get_telemetry",
+        },
     }
 
     def matches(self, tool_call: ToolCall, context: PolicyContext) -> bool:
@@ -203,6 +213,34 @@ class SafeReadAndSearchRule(PolicyRule):
         )
 
 
+class ChatResponseRule(PolicyRule):
+    """
+    Authorizes safe, non-actuating conversational chat responses:
+    - chat: respond_user (and canonical variants 'respond user', 'respond to user', 'respond_to_user')
+    """
+    rule_id = "RULE_CHAT_RESPONSE_ALLOWED"
+    description = "Authorizes normal conversational responses to the user."
+
+    ALLOWED_ACTIONS: Set[str] = {
+        "respond_user",
+        "respond user",
+        "respond to user",
+        "respond_to_user",
+    }
+
+    def matches(self, tool_call: ToolCall, context: PolicyContext) -> bool:
+        cap = tool_call.capability.lower().strip()
+        act = tool_call.action.lower().strip().replace("-", "_")
+        return cap == "chat" and act in self.ALLOWED_ACTIONS
+
+    def evaluate(self, tool_call: ToolCall, context: PolicyContext) -> PolicyResult:
+        return PolicyResult.allow(
+            rule_id=self.rule_id,
+            reason=f"Conversational response '{tool_call.capability}.{tool_call.action}' is authorized by safety policy.",
+            metadata={"risk_level": RiskLevel.SAFE.value},
+        )
+
+
 class ComputerObservationRule(PolicyRule):
     """
     Authorizes safe visual observation and bounded pause operations:
@@ -212,8 +250,10 @@ class ComputerObservationRule(PolicyRule):
     description = "Authorizes safe, read-only computer screenshot and wait operations."
 
     def matches(self, tool_call: ToolCall, context: PolicyContext) -> bool:
-        cap = tool_call.capability.lower()
-        act = tool_call.action.lower()
+        cap = tool_call.capability.lower().strip()
+        act = tool_call.action.lower().strip()
+        if act.startswith("computer "):
+            act = act[9:].strip()
         return cap == "computer" and act in ("screenshot", "wait")
 
     def evaluate(self, tool_call: ToolCall, context: PolicyContext) -> PolicyResult:
@@ -234,8 +274,10 @@ class ComputerLowRiskActionRule(PolicyRule):
     description = "Governs mouse cursor, scroll, and click interactions based on autonomy level."
 
     def matches(self, tool_call: ToolCall, context: PolicyContext) -> bool:
-        cap = tool_call.capability.lower()
-        act = tool_call.action.lower()
+        cap = tool_call.capability.lower().strip()
+        act = tool_call.action.lower().strip()
+        if act.startswith("computer "):
+            act = act[9:].strip()
         return cap == "computer" and act in ("move", "scroll", "click", "double_click")
 
     def evaluate(self, tool_call: ToolCall, context: PolicyContext) -> PolicyResult:
@@ -273,8 +315,10 @@ class ComputerSensitiveActionRule(PolicyRule):
     }
 
     def matches(self, tool_call: ToolCall, context: PolicyContext) -> bool:
-        cap = tool_call.capability.lower()
-        act = tool_call.action.lower()
+        cap = tool_call.capability.lower().strip()
+        act = tool_call.action.lower().strip()
+        if act.startswith("computer "):
+            act = act[9:].strip()
         return cap == "computer" and act in ("type", "press_key")
 
     def evaluate(self, tool_call: ToolCall, context: PolicyContext) -> PolicyResult:
@@ -364,6 +408,97 @@ class GoalLifecycleOperationRule(PolicyRule):
         )
 
 
+class DemoApplicationLaunchPolicyRule(PolicyRule):
+    """
+    Authorizes bounded, registered desktop application operations strictly in DEMO_MODE.
+    Strictly forbids arbitrary executable paths, shell commands, or unregistered applications.
+    """
+    rule_id = "RULE_DEMO_APP_LAUNCH"
+    description = "Governs controlled demo application launch/close/focus for whitelisted registry apps."
+
+    FORBIDDEN_PARAMS: Set[str] = {
+        "executable", "path", "command", "cmd", "shell", "exec", "script",
+        "args", "arguments", "cli", "binary", "filename",
+    }
+
+    ALLOWED_ACTIONS: Set[str] = {"launch", "close", "focus"}
+
+    def __init__(self, demo_mode: bool = True):
+        self.demo_mode = demo_mode
+
+    def matches(self, tool_call: ToolCall, context: PolicyContext) -> bool:
+        if not self.demo_mode:
+            return False
+        cap = tool_call.capability.lower().strip()
+        return cap == "computer_app"
+
+    def evaluate(self, tool_call: ToolCall, context: PolicyContext) -> PolicyResult:
+        if not self.demo_mode:
+            return PolicyResult.deny(
+                rule_id="RULE_DEMO_APP_DENIED",
+                reason="Demonstration application execution is strictly disabled in production mode.",
+                explanation="Demo execution rule cannot be used when demo mode is false.",
+                metadata={"risk_level": RiskLevel.HIGH.value},
+            )
+
+        act = tool_call.action.lower().strip()
+        if act.startswith("computer app "):
+            act = act[13:].strip()
+        elif act.startswith("computer_app "):
+            act = act[13:].strip()
+
+        params = tool_call.parameters or {}
+
+        # 1. Action validation
+        if act not in self.ALLOWED_ACTIONS:
+            return PolicyResult.deny(
+                rule_id="RULE_DEMO_APP_DENIED",
+                reason=f"Action '{act}' is not an authorized demonstration action. Permitted: launch, close, focus.",
+                explanation=f"Demonstration mode only supports actions: {', '.join(sorted(self.ALLOWED_ACTIONS))}.",
+                metadata={"risk_level": RiskLevel.HIGH.value},
+            )
+
+        # 2. Reject any attempt to supply arbitrary executable, path, command, or shell
+        for bad_key in self.FORBIDDEN_PARAMS:
+            if bad_key in params:
+                return PolicyResult.deny(
+                    rule_id="RULE_DEMO_APP_DENIED",
+                    reason=f"Supplying arbitrary '{bad_key}' is strictly forbidden by demonstration safety policy.",
+                    explanation="Callers may only specify a registered application ID, never arbitrary paths or shell commands.",
+                    metadata={"risk_level": RiskLevel.CRITICAL.value, "forbidden_param": bad_key},
+                )
+
+        # 3. Resolve app_id
+        app_id_raw = params.get("app_id") or params.get("app") or params.get("application")
+        if not app_id_raw or not isinstance(app_id_raw, str):
+            return PolicyResult.deny(
+                rule_id="RULE_DEMO_APP_DENIED",
+                reason="Demonstration application request is malformed: missing required string 'app_id'.",
+                explanation="A registered application identifier (e.g. 'vscode', 'chrome', 'notepad') is required.",
+                metadata={"risk_level": RiskLevel.HIGH.value},
+            )
+
+        app_id = app_id_raw.strip().lower()
+
+        from computer.demo_app_capability import FIXED_APPLICATION_REGISTRY
+        if app_id not in FIXED_APPLICATION_REGISTRY:
+            valid_apps = ", ".join(sorted(FIXED_APPLICATION_REGISTRY.keys()))
+            return PolicyResult.deny(
+                rule_id="RULE_DEMO_APP_DENIED",
+                reason=f"Application '{app_id}' is not an authorized demonstration application. Allowed: {valid_apps}.",
+                explanation=f"Unknown or unauthorized application '{app_id}'. Default deny enforced.",
+                metadata={"risk_level": RiskLevel.HIGH.value, "app_id": app_id},
+            )
+
+        entry = FIXED_APPLICATION_REGISTRY[app_id]
+
+        return PolicyResult.allow(
+            rule_id="RULE_DEMO_APP_ALLOWED",
+            reason=f"Demonstration operation '{act}' for authorized application '{entry.display_name}' ({app_id}) is permitted.",
+            metadata={"risk_level": RiskLevel.LOW.value, "app_id": app_id, "action": act, "demo_mode": True},
+        )
+
+
 class DefaultDenyRule(PolicyRule):
     """
     Catch-all default-deny rule enforcing that no unknown capability or action ever fails open.
@@ -375,6 +510,24 @@ class DefaultDenyRule(PolicyRule):
         return True
 
     def evaluate(self, tool_call: ToolCall, context: PolicyContext) -> PolicyResult:
+        cap = tool_call.capability.lower().strip()
+        act = tool_call.action.lower().strip()
+        if act.startswith("computer "):
+            act = act[9:].strip()
+        if cap == "computer" and act in ("open_app", "launch_app", "open_application"):
+            return PolicyResult.deny(
+                rule_id=self.rule_id,
+                reason="Opening applications is not permitted by safety policy under the controlled computer-use layer. Permitted computer actions are: screenshot, click, double_click, move, type, press_key, scroll, wait.",
+                explanation="Arbitrary application launching is not an approved computer-use capability.",
+                metadata={"risk_level": RiskLevel.HIGH.value},
+            )
+        if cap == "computer_app":
+            return PolicyResult.deny(
+                rule_id=self.rule_id,
+                reason="Application control ('computer_app') is not permitted by safety policy in production mode.",
+                explanation="Demonstration application execution is disabled in production mode.",
+                metadata={"risk_level": RiskLevel.HIGH.value},
+            )
         return PolicyResult.deny(
             rule_id=self.rule_id,
             reason=f"No safety policy rule permits capability '{tool_call.capability}' with action '{tool_call.action}'. Default deny enforced.",
@@ -389,29 +542,43 @@ class StandardPolicyEngine(PolicyEngineInterface):
     Evaluates ordered PolicyRule implementations with an absolute default-deny guarantee.
     """
 
-    def __init__(self, rules: Optional[List[PolicyRule]] = None):
+    def __init__(self, rules: Optional[List[PolicyRule]] = None, demo_mode: Optional[bool] = None):
         """
         Initialize StandardPolicyEngine with an ordered sequence of rules.
 
         Args:
             rules: Optional custom rules sequence for dependency injection / testing.
+            demo_mode: Optional boolean flag. If None, checks get_settings().demo_mode.
         """
+        if demo_mode is None:
+            try:
+                from config.settings import get_settings
+                self.demo_mode = get_settings().demo_mode
+            except Exception:
+                self.demo_mode = False
+        else:
+            self.demo_mode = bool(demo_mode)
+
         if rules is not None:
             self.rules: List[PolicyRule] = list(rules)
         else:
-            self.rules = [
+            default_rules: List[PolicyRule] = [
                 ProhibitedCapabilityRule(),
                 LegacyToolRestrictionRule(),
                 DestructiveMemoryRule(),
                 SensitiveMemorySaveRule(),
                 SafeReadAndSearchRule(),
+                ChatResponseRule(),
                 ComputerObservationRule(),
                 ComputerLowRiskActionRule(),
                 ComputerSensitiveActionRule(),
                 GoalLifecycleOperationRule(),
                 DeviceGatewayOperationRule(),
-                DefaultDenyRule(),
             ]
+            if self.demo_mode:
+                default_rules.append(DemoApplicationLaunchPolicyRule(demo_mode=True))
+            default_rules.append(DefaultDenyRule())
+            self.rules = default_rules
 
 
     def evaluate(

@@ -13,15 +13,25 @@ class StandardExecutionEngine(ExecutionEngineInterface):
     manages task/plan statuses, enforces fail-fast error handling, and collects Results.
     """
 
-    def __init__(self, router: Optional[Any] = None):
+    def __init__(
+        self,
+        router: Optional[Any] = None,
+        policy_engine: Optional[Any] = None,
+        demo_mode: Optional[bool] = None,
+    ):
         """
         Initialize StandardExecutionEngine.
 
         Args:
             router: Optional Router instance or stub for dependency injection.
                     Defaults to standard Router() if omitted.
+            policy_engine: Optional PolicyEngineInterface for execution authorization.
+            demo_mode: Optional boolean flag for demo mode execution.
         """
-        self.router = router if router is not None else Router()
+        self.router = router if router is not None else Router(
+            policy_engine=policy_engine,
+            demo_mode=demo_mode,
+        )
 
     def execute(self, plan: Plan) -> List[Result]:
         if not isinstance(plan, Plan):

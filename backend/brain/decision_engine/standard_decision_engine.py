@@ -22,13 +22,25 @@ class StandardDecisionEngine(DecisionEngineInterface):
         "calculator",
         "notepad",
         "chrome",
-        "vscode",
         "explorer",
-        "terminal",
-        "cmd",
-        "powershell",
         "time",
     }
+
+    def __init__(self, demo_mode: Optional[bool] = None):
+        """
+        Initialize StandardDecisionEngine.
+
+        Args:
+            demo_mode: Optional boolean flag for demo mode execution. If None, checks settings.
+        """
+        if demo_mode is None:
+            try:
+                from config.settings import get_settings
+                self.demo_mode = get_settings().demo_mode
+            except Exception:
+                self.demo_mode = False
+        else:
+            self.demo_mode = bool(demo_mode)
 
     def decide(self, request: Request) -> Decision:
         if not isinstance(request, Request):
@@ -64,6 +76,93 @@ class StandardDecisionEngine(DecisionEngineInterface):
                 ),
             )
 
+        # 1b. Live State Authority Precedence (Phase 6.6)
+        # Device, WorldState, Situation, Mission queries take precedence over RAG and Web.
+        classification_raw = request.parameters.get("classification")
+        if not classification_raw:
+            from brain.request_understanding.standard_understanding import StandardRequestUnderstanding
+            u = StandardRequestUnderstanding()
+            cls_enum, cls_hints = u._classify_request(request.normalized_text, request.parameters)
+            classification_raw = cls_enum.value
+            for k, v in cls_hints.items():
+                if k not in request.parameters:
+                    request.parameters[k] = v
+
+        if classification_raw == "CURRENT_DEVICE_STATE":
+            target_device = request.parameters.get("target_device") or "drone"
+            query_type = request.parameters.get("query_type") or "status"
+            routing_hints = self._build_routing_hints(
+                request,
+                {
+                    "target_device": target_device,
+                    "query_type": query_type,
+                    "live_query": True,
+                },
+            )
+            return Decision(
+                request_id=request.id,
+                primary_goal="query_device_state",
+                required_capabilities=[CapabilityType.DEVICE],
+                execution_mode=ExecutionMode.SINGLE_STEP,
+                confidence=0.98,
+                reasoning=f"Authoritative live device state query for '{target_device}' ({query_type}).",
+                routing_hints=routing_hints,
+            )
+
+        if classification_raw == "CURRENT_WORLD_STATE":
+            routing_hints = self._build_routing_hints(
+                request,
+                {
+                    "query_type": "world_state",
+                    "live_query": True,
+                },
+            )
+            return Decision(
+                request_id=request.id,
+                primary_goal="query_world_state",
+                required_capabilities=[CapabilityType.DEVICE],
+                execution_mode=ExecutionMode.SINGLE_STEP,
+                confidence=0.98,
+                reasoning="Authoritative ATLAS WorldState query.",
+                routing_hints=routing_hints,
+            )
+
+        if classification_raw == "CURRENT_SITUATION":
+            routing_hints = self._build_routing_hints(
+                request,
+                {
+                    "query_type": "situation",
+                    "live_query": True,
+                },
+            )
+            return Decision(
+                request_id=request.id,
+                primary_goal="query_situation_state",
+                required_capabilities=[CapabilityType.DEVICE],
+                execution_mode=ExecutionMode.SINGLE_STEP,
+                confidence=0.98,
+                reasoning="Authoritative active situation intelligence query.",
+                routing_hints=routing_hints,
+            )
+
+        if classification_raw == "CURRENT_MISSION":
+            routing_hints = self._build_routing_hints(
+                request,
+                {
+                    "query_type": "mission",
+                    "live_query": True,
+                },
+            )
+            return Decision(
+                request_id=request.id,
+                primary_goal="query_mission_state",
+                required_capabilities=[CapabilityType.DEVICE],
+                execution_mode=ExecutionMode.SINGLE_STEP,
+                confidence=0.98,
+                reasoning="Authoritative active mission and goal query.",
+                routing_hints=routing_hints,
+            )
+
         # 2. Capability Detection
         text = request.normalized_text
         detected_caps: List[CapabilityType] = []
@@ -83,12 +182,20 @@ class StandardDecisionEngine(DecisionEngineInterface):
             if web_hints:
                 extra_hints.update(web_hints)
 
-        # Tool detection
-        is_tool, tool_hint = self._detect_tool(request)
-        if is_tool:
+        # Computer detection (evaluated BEFORE generic tool so computer-use and desktop requests route safely)
+        is_computer, comp_hints = self._detect_computer(request)
+        if is_computer:
             detected_caps.append(CapabilityType.TOOL)
-            if tool_hint:
-                extra_hints["tool_hint"] = tool_hint
+            if comp_hints:
+                extra_hints.update(comp_hints)
+
+        # Tool detection
+        if not is_computer:
+            is_tool, tool_hint = self._detect_tool(request)
+            if is_tool:
+                detected_caps.append(CapabilityType.TOOL)
+                if tool_hint:
+                    extra_hints["tool_hint"] = tool_hint
 
         # Knowledge detection
         if not is_memory and not is_web:
@@ -106,8 +213,9 @@ class StandardDecisionEngine(DecisionEngineInterface):
                         extra_hints["query"] = query_hint
 
         # Vision detection
-        if re.search(r"\b(screenshot|camera|image|picture|screen\s*capture)\b", text, re.IGNORECASE):
-            detected_caps.append(CapabilityType.VISION)
+        if not (is_computer and comp_hints.get("action") == "screenshot"):
+            if re.search(r"\b(screenshot|camera|image|picture|screen\s*capture)\b", text, re.IGNORECASE):
+                detected_caps.append(CapabilityType.VISION)
 
         # 3. Strategy & Goal Determination
         routing_hints = self._build_routing_hints(request, extra_hints)
@@ -140,6 +248,28 @@ class StandardDecisionEngine(DecisionEngineInterface):
                     routing_hints=routing_hints,
                 )
             if cap == CapabilityType.TOOL:
+                if extra_hints.get("tool_hint") == "computer_app":
+                    app_id = extra_hints.get("app_id", "vscode")
+                    action = extra_hints.get("action", "launch")
+                    return Decision(
+                        request_id=request.id,
+                        primary_goal="computer_app",
+                        required_capabilities=[CapabilityType.TOOL],
+                        execution_mode=ExecutionMode.SINGLE_STEP,
+                        confidence=0.98,
+                        reasoning=f"Controlled demonstration application execution for '{app_id}' ({action}).",
+                        routing_hints=routing_hints,
+                    )
+                if extra_hints.get("tool_hint") == "computer":
+                    return Decision(
+                        request_id=request.id,
+                        primary_goal="computer_action",
+                        required_capabilities=[CapabilityType.TOOL],
+                        execution_mode=ExecutionMode.SINGLE_STEP,
+                        confidence=0.95,
+                        reasoning=f"Computer interaction request identified (action: '{extra_hints.get('action', 'unspecified')}').",
+                        routing_hints=routing_hints,
+                    )
                 return Decision(
                     request_id=request.id,
                     primary_goal="execute_tool",
@@ -199,11 +329,20 @@ class StandardDecisionEngine(DecisionEngineInterface):
         )
 
     def _detect_knowledge(self, request: Request) -> tuple[bool, Optional[str]]:
+        text = request.normalized_text
+
+        # ATLAS live state queries must NEVER route to Knowledge/RAG
+        if re.search(
+            r"\b(?:drone|rover|vision|glass|devices?|battery|telemetry|world\s*state|situations?\s+are\s+active|missions?\s+are\s+active|goals?\s+are\s+running)\b",
+            text,
+            re.IGNORECASE,
+        ) and not re.search(r"\b(?:documentation|docs?|manual|specification|spec|paper)\b", text, re.IGNORECASE):
+            return False, None
+
         # Explicit query parameter takes precedence
         if "query" in request.parameters:
             return True, str(request.parameters["query"])
 
-        text = request.normalized_text
         knowledge_patterns = [
             r"\b(search for|find|retrieve|look up|read docs|documentation|documents?|paper|uploaded)\b",
             r"\b(what is|who is|what does|how does|tell me about|explain|kernel|linux|architecture)\b",
@@ -214,10 +353,143 @@ class StandardDecisionEngine(DecisionEngineInterface):
 
         return False, None
 
+    def _detect_computer(self, request: Request) -> tuple[bool, Dict[str, Any]]:
+        text = request.normalized_text.strip()
+        hints: Dict[str, Any] = {}
+
+        # 0. Bounded Demo Application Execution (DEMO_MODE only)
+        if self.demo_mode:
+            app_id = request.parameters.get("demo_app_id")
+            app_act = request.parameters.get("demo_app_action", "launch")
+
+            if not app_id:
+                app_match = re.search(
+                    r"\b(?:open|launch|start|run|close|focus|switch\s+to)\s+(?:the\s+|teh\s+)?(vs\s*code|vscode|visual\s+studio\s+code|chrome|google\s+chrome|notepad)\b",
+                    text,
+                    re.IGNORECASE,
+                )
+                if app_match:
+                    raw_app = app_match.group(1).lower()
+                    if any(v in raw_app for v in ("vscode", "visual studio", "vs code")):
+                        app_id = "vscode"
+                    elif "chrome" in raw_app:
+                        app_id = "chrome"
+                    elif "notepad" in raw_app:
+                        app_id = "notepad"
+
+                    if re.search(r"\bclose\b", text, re.IGNORECASE):
+                        app_act = "close"
+                    elif re.search(r"\b(?:focus|switch\s+to)\b", text, re.IGNORECASE):
+                        app_act = "focus"
+                    else:
+                        app_act = "launch"
+
+            cleaned = text.strip().lower()
+            if not app_id and cleaned in ("vs code", "vscode", "visual studio code"):
+                app_id = "vscode"
+                app_act = "launch"
+            elif not app_id and cleaned in ("chrome", "google chrome"):
+                app_id = "chrome"
+                app_act = "launch"
+            elif not app_id and cleaned in ("notepad",):
+                app_id = "notepad"
+                app_act = "launch"
+
+            if app_id in ("vscode", "chrome", "notepad"):
+                display_names = {
+                    "vscode": "Visual Studio Code",
+                    "chrome": "Google Chrome",
+                    "notepad": "Notepad",
+                }
+                hints["tool_hint"] = "computer_app"
+                hints["action"] = app_act
+                hints["app_id"] = app_id
+                hints["target"] = app_id
+                hints["app_name"] = display_names.get(app_id, app_id)
+                return True, hints
+
+        # 1. Desktop Application Requests (e.g. "open VS Code", "open the vs code in my pc", "start Visual Studio Code")
+        vscode_app_match = re.search(
+            r"\b(?:open|launch|start|run|close|switch\s+to)\s+(?:the\s+|teh\s+)?(?:vs\s*code|vscode|visual\s+studio\s+code)\b",
+            text,
+            re.IGNORECASE,
+        )
+        if vscode_app_match:
+            hints["tool_hint"] = "computer"
+            hints["action"] = "open_app"
+            hints["target"] = "vscode"
+            hints["app_name"] = "Visual Studio Code"
+            return True, hints
+
+        # PC/Computer context with open/launch/start verbs (e.g. "open ... on my pc", "launch ... on desktop")
+        pc_context_match = re.search(
+            r"\b(?:open|launch|start|run)\s+(?:the\s+|teh\s+)?([a-zA-Z0-9_\-\.\s]+?)\s+(?:in|on)\s+(?:my\s+)?(?:pc|computer|desktop|machine|laptop)\b",
+            text,
+            re.IGNORECASE,
+        )
+        if pc_context_match:
+            target_raw = pc_context_match.group(1).strip().lower()
+            target = "vscode" if any(v in target_raw for v in ("vs code", "vscode", "visual studio")) else target_raw
+            hints["tool_hint"] = "computer"
+            hints["action"] = "open_app"
+            hints["target"] = target
+            hints["app_name"] = target
+            return True, hints
+
+        # Standalone VS Code command
+        cleaned = text.strip().lower()
+        if cleaned in ("vs code", "vscode", "visual studio code"):
+            hints["tool_hint"] = "computer"
+            hints["action"] = "open_app"
+            hints["target"] = "vscode"
+            hints["app_name"] = "Visual Studio Code"
+            return True, hints
+
+        # 2. Direct GUI Actions matching ComputerAction
+        if re.search(r"\bdouble[\s\-_]click\b", text, re.IGNORECASE):
+            hints["tool_hint"] = "computer"
+            hints["action"] = "double_click"
+            return True, hints
+        if re.search(r"\b(?:left\s+|right\s+)?click\b", text, re.IGNORECASE):
+            hints["tool_hint"] = "computer"
+            hints["action"] = "click"
+            return True, hints
+        if re.search(r"\bmove\s+(?:cursor|mouse)\b", text, re.IGNORECASE):
+            hints["tool_hint"] = "computer"
+            hints["action"] = "move"
+            return True, hints
+        if re.search(r"\btype\s+(?:text|keystroke)", text, re.IGNORECASE):
+            hints["tool_hint"] = "computer"
+            hints["action"] = "type"
+            return True, hints
+        if re.search(r"\bpress\s+(?:key\s+)?(?:enter|esc|escape|tab|space|backspace|delete)\b", text, re.IGNORECASE):
+            hints["tool_hint"] = "computer"
+            hints["action"] = "press_key"
+            return True, hints
+        if re.search(r"\bscroll\s+(?:up|down|left|right)\b", text, re.IGNORECASE):
+            hints["tool_hint"] = "computer"
+            hints["action"] = "scroll"
+            return True, hints
+        if re.search(r"\bwait\s+(?:for\s+)?\d+\s*(?:s|sec|seconds?)\b", text, re.IGNORECASE):
+            hints["tool_hint"] = "computer"
+            hints["action"] = "wait"
+            return True, hints
+        comp_action_match = re.search(
+            r"\bcomputer\s+(screenshot|click|double_click|move|type|press_key|scroll|wait)\b",
+            text,
+            re.IGNORECASE,
+        )
+        if comp_action_match:
+            hints["tool_hint"] = "computer"
+            hints["action"] = comp_action_match.group(1).lower()
+            return True, hints
+
+        return False, hints
+
     def _detect_tool(self, request: Request) -> tuple[bool, Optional[str]]:
         text = request.normalized_text
 
-        # 1. Action verb followed by target: "open calculator", "launch notepad"
+        # 1. Action verb followed by target in KNOWN_TOOLS: "open calculator", "launch notepad"
         action_match = re.search(
             r"\b(?:open|launch|start|run|close|execute)\s+([a-zA-Z0-9_\-\.]+)",
             text,
@@ -226,8 +498,6 @@ class StandardDecisionEngine(DecisionEngineInterface):
         if action_match:
             candidate = action_match.group(1).lower().strip()
             if candidate in self.KNOWN_TOOLS:
-                return True, candidate
-            if candidate not in ("http", "https") and not re.search(r"https?://", text, re.IGNORECASE):
                 return True, candidate
 
         # 2. Standalone tool command (e.g. "calculator", "notepad")
@@ -342,6 +612,14 @@ class StandardDecisionEngine(DecisionEngineInterface):
 
         # If it has local document signals and no explicit web directive, let Knowledge handle it
         if has_local_doc_signal:
+            return False, hints
+
+        # ATLAS live state queries must NEVER route to Web search
+        if re.search(
+            r"\b(?:world\s*state|what\s+does\s+atlas|entities\s+present|where\s+are\s+the\s+devices|drone|rover|vision|glass|devices|situations?\s+are\s+active|missions?\s+are\s+active|goals?\s+are\s+running)\b",
+            text,
+            re.IGNORECASE,
+        ):
             return False, hints
 
         # 5. Current-Information Signals

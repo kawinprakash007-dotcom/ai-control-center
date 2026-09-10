@@ -68,6 +68,8 @@ class ComputerCapability:
             call_id = params.get("call_id")
 
         act_str = str(action or "").strip().lower()
+        if act_str.startswith("computer "):
+            act_str = act_str[9:].strip()
         call_id_str = str(call_id) if call_id else None
 
         # -------------------------------------------------------------

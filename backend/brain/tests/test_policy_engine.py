@@ -21,6 +21,7 @@ from safety.policy_engine import (
     DestructiveMemoryRule,
     SensitiveMemorySaveRule,
     SafeReadAndSearchRule,
+    ChatResponseRule,
     DefaultDenyRule,
 )
 from tools.tool_orchestrator import ToolOrchestrator
@@ -389,3 +390,181 @@ class TestPolicyObservabilityAndMetadata:
         assert "policy_result" in result.data
         assert result.data["policy_result"]["rule_id"] == "RULE_AUDIT_DENIAL"
         assert result.data["policy_result"]["reason"] == "Denial for audit testing."
+
+
+# ============================================================================
+# 7. CHAT CAPABILITY POLICY & STRICT SECURITY BOUNDARIES
+# ============================================================================
+
+class TestChatPolicyAndSecurityBoundary:
+    """
+    Focused tests for conversational chat response authorization and strict default-deny boundaries:
+    1. chat/respond_user is allowed
+    2. ordinary chat response does not require confirmation
+    3. unknown chat action remains denied
+    4. chat cannot execute device actions
+    5. chat cannot invoke prohibited shell actions
+    6. default-deny still works for unknown capabilities
+    7. dangerous existing actions remain governed by existing policy
+    8. no frontend/API bypass (ToolOrchestrator rejects unauthorized actions)
+    """
+
+    @pytest.fixture
+    def engine(self):
+        return StandardPolicyEngine()
+
+    def test_01_chat_respond_user_is_allowed(self, engine):
+        """1. chat/respond_user and canonical variants are allowed as safe conversational responses."""
+        for action in ("respond_user", "respond user", "Respond to User", "respond to user", "respond-user", "respond_to_user"):
+            tc = ToolCall(capability="chat", action=action, parameters={"query": "Hello"})
+            res = engine.evaluate(tc)
+            assert res.decision == PolicyDecision.ALLOW, f"Action '{action}' was not allowed"
+            assert res.is_allowed is True
+            assert res.rule_id == "RULE_CHAT_RESPONSE_ALLOWED"
+            assert res.metadata.get("risk_level") == RiskLevel.SAFE.value
+
+    def test_02_ordinary_chat_response_does_not_require_confirmation(self, engine):
+        """2. Ordinary chat response does not require confirmation or user permission."""
+        tc = ToolCall(capability="chat", action="respond_user", parameters={"query": "Check system status"})
+        res = engine.evaluate(tc)
+        assert res.decision == PolicyDecision.ALLOW
+        assert res.requires_permission is False
+        assert res.explanation is None
+
+    def test_03_unknown_chat_action_remains_denied(self, engine):
+        """3. Unknown or arbitrary actions on chat capability remain strictly denied by default-deny."""
+        for action in ("arbitrary_action", "launch_missile", "reboot", "dance", "inject_code"):
+            tc = ToolCall(capability="chat", action=action)
+            res = engine.evaluate(tc)
+            assert res.decision == PolicyDecision.DENY
+            assert res.is_denied is True
+            assert res.rule_id == "RULE_DEFAULT_DENY"
+            assert "Default deny enforced" in res.reason
+
+    def test_04_chat_cannot_execute_device_actions(self, engine):
+        """4. Chat capability cannot execute device operations or dispatch to hardware."""
+        for action in ("execute_device", "device_dispatch", "device_action", "fly_drone", "arm_rover"):
+            tc = ToolCall(capability="chat", action=action)
+            res = engine.evaluate(tc)
+            assert res.decision == PolicyDecision.DENY
+            assert res.is_denied is True
+            assert res.rule_id in ("RULE_FORBIDDEN_CAPABILITY", "RULE_DEFAULT_DENY")
+
+    def test_05_chat_cannot_invoke_prohibited_shell_actions(self, engine):
+        """5. Chat capability cannot invoke shell, OS, powershell, or subprocess actions."""
+        for action in ("shell", "exec", "eval", "subprocess", "cmd", "powershell", "system", "chmod"):
+            tc = ToolCall(capability="chat", action=action)
+            res = engine.evaluate(tc)
+            assert res.decision == PolicyDecision.DENY
+            assert res.is_denied is True
+            assert res.rule_id == "RULE_FORBIDDEN_CAPABILITY"
+            assert "strictly forbidden" in res.reason
+
+    def test_06_default_deny_still_works_for_unknown_capabilities(self, engine):
+        """6. Default-deny still catches completely unknown capabilities and actions."""
+        for cap in ("teleportation", "quantum_telemetry", "drone_direct", "unregistered_bot"):
+            tc = ToolCall(capability=cap, action="respond_user")
+            res = engine.evaluate(tc)
+            assert res.decision == PolicyDecision.DENY
+            assert res.is_denied is True
+            assert res.rule_id == "RULE_DEFAULT_DENY"
+
+    def test_07_dangerous_existing_actions_remain_governed(self, engine):
+        """7. Dangerous capabilities and actions remain strictly governed by existing safety policies."""
+        # Shell / system execution is strictly forbidden
+        tc_shell = ToolCall(capability="shell", action="execute", parameters={"cmd": "ls"})
+        assert engine.evaluate(tc_shell).decision == PolicyDecision.DENY
+
+        # Destructive unconfirmed memory forget requires confirmation
+        tc_forget = ToolCall(capability="memory", action="forget", parameters={"key": "secret"})
+        res_forget = engine.evaluate(tc_forget)
+        assert res_forget.decision == PolicyDecision.REQUIRE_CONFIRMATION
+
+        # Sensitive key save in manual autonomy mode requires permission
+        tc_save = ToolCall(capability="memory", action="save", parameters={"key": "api_key", "value": "xyz"})
+        ctx = PolicyContext.from_tool_call(tc_save, autonomy_level=AutonomyLevel.MANUAL)
+        res_save = engine.evaluate(tc_save, ctx)
+        assert res_save.decision == PolicyDecision.ASK_PERMISSION
+
+    def test_08_no_frontend_or_api_bypass(self, engine):
+        """8. ToolOrchestrator rejects unapproved actions even if registered and whitelisted."""
+        spy = SpyCapability(output="Safe chat output")
+        reg = CapabilityRegistry(capabilities={"chat": spy})
+        orchestrator = ToolOrchestrator(
+            registry=reg,
+            policy_engine=engine,
+            allowed_capabilities={"chat": {"respond_user", "shell", "arbitrary_exploit"}},
+        )
+
+        # Prohibited action via chat capability must fail (blocked by orchestrator safety guard or policy engine)
+        tc_bad = ToolCall(capability="chat", action="shell", parameters={"cmd": "whoami"})
+        res_bad = orchestrator.execute(tc_bad)
+        assert res_bad.success is False
+        assert "Prohibited capability or action" in res_bad.message or "Execution denied by policy" in res_bad.message
+        assert spy.call_count == 0
+
+        # Unknown action via chat capability must fail via PolicyEngine default-deny
+        tc_unknown = ToolCall(capability="chat", action="arbitrary_exploit")
+        res_unknown = orchestrator.execute(tc_unknown)
+        assert res_unknown.success is False
+        assert "Execution denied by policy [RULE_DEFAULT_DENY]" in res_unknown.message
+        assert spy.call_count == 0
+
+        # Safe chat action is permitted through ToolOrchestrator
+        tc_safe = ToolCall(capability="chat", action="respond_user", parameters={"query": "Hello"})
+        res_safe = orchestrator.execute(tc_safe)
+        assert res_safe.success is True
+        assert spy.call_count == 1
+
+    def test_09_manual_command_check_drone_status_permitted(self, engine):
+        """
+        Exact manual verification command:
+        'Check the drone status'
+        Expected:
+        - Request accepted
+        - CognitiveRuntime processes it
+        - Policy permits response generation (RULE_CHAT_RESPONSE_ALLOWED)
+        - User receives an ATLAS response (no PolicyEngine denial)
+        """
+        from brain.request_understanding import StandardRequestUnderstanding
+        from brain.decision_engine import StandardDecisionEngine
+        from brain.planning import StandardPlanner
+        from core.models.runtime import TurnStatus
+        from runtime.cognitive_runtime import CognitiveRuntime
+        from core.interfaces.execution_engine_interface import ExecutionEngineInterface
+
+        # 1. Verify Request Understanding and Decision
+        req = StandardRequestUnderstanding().understand("Check the drone status")
+        assert req.original_text == "Check the drone status"
+        dec = StandardDecisionEngine().decide(req)
+        plan = StandardPlanner().plan(dec)
+
+        # 2. Verify Plan contains live_state / chat query
+        assert len(plan.steps) >= 1
+        step = plan.steps[0]
+        assert step.tool in ("live_state", "chat") or step.type in ("device", "chat")
+
+        # 3. Verify Policy permits the proposed tool call
+        tc = ToolCall(capability=step.tool, action=step.action)
+        ctx = PolicyContext(capability=tc.capability, action=tc.action)
+        res = engine.evaluate(tc, ctx)
+        assert res.decision == PolicyDecision.ALLOW
+        assert res.is_allowed is True
+
+        # 4. Verify CognitiveRuntime turn execution
+        class StubExecutionEngine(ExecutionEngineInterface):
+            def execute(self, p):
+                for task in p.steps:
+                    task.status = "completed"
+                    task.result = "ATLAS: Drone telemetry is nominal."
+                p.status = "completed"
+                return [Result(success=True, message="Responded", output="ATLAS: Drone telemetry is nominal.")]
+
+        runtime = CognitiveRuntime(
+            policy_engine=engine,
+            execution_engine=StubExecutionEngine(),
+        )
+        turn_result = runtime.execute_turn("Check the drone status")
+        assert turn_result.status == TurnStatus.SUCCEEDED
+        assert "Policy denied execution" not in turn_result.response
+        assert "Drone telemetry is nominal" in turn_result.response

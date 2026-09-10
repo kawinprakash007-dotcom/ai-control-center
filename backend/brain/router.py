@@ -18,12 +18,16 @@ class Router:
         registry: Optional[CapabilityRegistry] = None,
         executor: Optional[Executor] = None,
         orchestrator: Optional[ToolOrchestrator] = None,
+        policy_engine: Optional[Any] = None,
+        demo_mode: Optional[bool] = None,
     ):
         self.registry = registry if registry is not None else (orchestrator.registry if orchestrator else CapabilityRegistry())
         self.executor = executor if executor is not None else (orchestrator.executor if orchestrator else Executor())
         self.orchestrator = orchestrator if orchestrator is not None else ToolOrchestrator(
             registry=self.registry,
             executor=self.executor,
+            policy_engine=policy_engine,
+            demo_mode=demo_mode,
         )
 
     def route(self, task: Any) -> Result:

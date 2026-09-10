@@ -65,13 +65,13 @@ def create_app(settings: Optional[AtlasSettings] = None, in_memory_stores: bool 
 
     @app.get("/health")
     def root_health():
-        return {"status": "healthy", "platform": "ATLAS Central Orchestrator"}
+        return {"status": "healthy", "platform": "ATLAS Central Orchestrator", "demo_mode": getattr(cfg, "demo_mode", False)}
 
     @app.get("/ready")
     def root_ready(request: Request):
         atlas = getattr(request.app.state, "atlas", None)
         ready = atlas is not None and getattr(atlas, "ready", False)
-        return {"status": "ready" if ready else "initializing", "simulation_mode": getattr(cfg, "simulation_mode", True)}
+        return {"status": "ready" if ready else "initializing", "simulation_mode": getattr(cfg, "simulation_mode", True), "demo_mode": getattr(cfg, "demo_mode", False)}
 
     # Backward compatibility for legacy frontend client calling /chat
     class LegacyChatRequest(BaseModel):

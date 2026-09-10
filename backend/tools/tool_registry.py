@@ -16,6 +16,7 @@ from tools.capabilities import (
 from tools.knowledge_capability import KnowledgeCapability
 from tools.memory_capability import MemoryCapability
 from tools.web_capability import WebCapability
+from tools.live_state_capability import LiveStateCapability
 from computer.computer_capability import ComputerCapability
 
 
@@ -54,5 +55,7 @@ TOOL_REGISTRY = {
     "web": WebCapability(),
 
     "computer": ComputerCapability(),
+
+    "live_state": LiveStateCapability(),
 
 }

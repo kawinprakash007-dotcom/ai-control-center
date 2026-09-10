@@ -543,6 +543,16 @@ class DeviceGateway(DeviceGatewayInterface):
             last_err = self._latest_errors.get(device_id)
             telem = self._latest_telemetry.get(device_id)
             battery = telem.battery_pct if telem and telem.battery_pct is not None else None
+            if battery is None and device_id in self._device_adapters:
+                adapter = self._device_adapters[device_id]
+                if hasattr(adapter, "get_health"):
+                    try:
+                        adapter_health = adapter.get_health(device_id)
+                        battery = getattr(adapter_health, "battery_pct", None)
+                    except Exception:
+                        pass
+                if battery is None and hasattr(adapter, "battery_pct"):
+                    battery = getattr(adapter, "battery_pct", None)
 
             # Capability availability map
             cap_avail = {c.capability_name: True for c in dev.capabilities}
@@ -1116,6 +1126,26 @@ class DeviceGatewayCapability:
                 message=f"Health query unsupported on gateway for '{device_id}'.",
                 capability="device_gateway",
                 action="get_health",
+                call_id=call_id,
+            )
+
+        elif action == "get_telemetry":
+            device_id = str(params.get("device_id", ""))
+            health = getattr(self.gateway, "get_device_health", lambda d: None)(device_id)
+            telem = getattr(self.gateway, "_latest_telemetry", {}).get(device_id)
+            data = {}
+            if telem:
+                data = telem.to_dict() if hasattr(telem, "to_dict") else dict(telem)
+            elif health:
+                data = {
+                    "battery_pct": health.battery_pct,
+                    "connectivity": health.connectivity.value if hasattr(health.connectivity, "value") else str(health.connectivity),
+                }
+            return Result.ok(
+                message=f"Device '{device_id}' telemetry retrieved.",
+                data=data,
+                capability="device_gateway",
+                action="get_telemetry",
                 call_id=call_id,
             )
 

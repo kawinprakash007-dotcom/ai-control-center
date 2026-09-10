@@ -97,6 +97,22 @@ class Objective:
     blocker_reason: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "objective_id": self.objective_id,
+            "description": self.description,
+            "order": self.order,
+            "dependencies": list(self.dependencies),
+            "status": self.status.value if hasattr(self.status, "value") else str(self.status),
+            "completion_criteria": self.completion_criteria,
+            "attempts": self.attempts,
+            "max_attempts": self.max_attempts,
+            "progress": self.progress,
+            "result_summary": self.result_summary,
+            "blocker_reason": self.blocker_reason,
+            "metadata": dict(self.metadata),
+        }
+
     def is_terminal(self) -> bool:
         """Check if objective is in a terminal state."""
         return self.status in (
@@ -209,3 +225,31 @@ class Goal:
     def get_completed_objective_ids(self) -> Tuple[str, ...]:
         """Return tuple of completed objective IDs."""
         return tuple(obj.objective_id for obj in self.objectives if obj.status == ObjectiveStatus.COMPLETED)
+
+    def to_dict(self) -> Dict[str, Any]:
+        prio = self.priority.value if hasattr(self.priority, "value") else str(self.priority)
+        st = self.status.value if hasattr(self.status, "value") else str(self.status)
+        prog = {}
+        if hasattr(self, "progress") and self.progress:
+            prog = {
+                "percentage": getattr(self.progress, "percentage", 0.0),
+                "completed_objectives": getattr(self.progress, "completed_objectives", 0),
+                "total_objectives": getattr(self.progress, "total_objectives", 0),
+                "progress_reason": getattr(self.progress, "progress_reason", ""),
+            }
+        return {
+            "goal_id": self.goal_id,
+            "original_goal": self.original_goal,
+            "goal": self.goal,
+            "status": st,
+            "priority": prio,
+            "confidence": self.confidence,
+            "reason": self.reason,
+            "query": self.query,
+            "active_objective_id": self.active_objective_id,
+            "progress": prog,
+            "objectives": [obj.to_dict() if hasattr(obj, "to_dict") else str(obj) for obj in self.objectives],
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "metadata": dict(self.metadata),
+        }
