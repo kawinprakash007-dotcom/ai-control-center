@@ -1,33 +1,172 @@
-<div class="container">
-
-  <div class="card">
-
-    <h1>🤖 AI Control Center</h1>
-
-    <input
-      [(ngModel)]="userMessage"
-      placeholder="Speak or type a message"
-    >
-
-    <br><br>
-
-    <button (click)="startListening()">
-      🎤 Speak
-    </button>
-
-    
-
-    <div class="response">
-
-      <h3>Recognized Text</h3>
-
-<p>{{ userMessage || 'No text yet' }}</p>
-
-      <h3>AI Response</h3>
-
-<p>{{ aiResponse || 'No response yet' }}</p>
+<div class="atlas-shell">
+  <!-- Top Navigation Header -->
+  <header class="top-header">
+    <div class="header-left">
+      <div class="logo-mark">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#00f0ff" stroke-width="2.5">
+          <polygon points="12 2 22 20 2 20"></polygon>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <span class="brand-title">ATLAS</span>
+        <span class="brand-sub">CENTRAL COMMAND</span>
+      </div>
+      <span class="arch-badge font-mono">PHASE 6.6 AUTHORITATIVE</span>
+      @if (appState.isDemoMode()) {
+        <span class="demo-badge font-mono" id="demo-mode-indicator">DEMO MODE</span>
+      }
     </div>
 
+    <div class="header-right">
+      <!-- Live Clock -->
+      <div class="clock font-mono">
+        <span class="clock-icon">🕒</span>
+        {{ currentTime }}
+      </div>
+
+      <!-- WebSocket Live Connection Indicator -->
+      <div class="ws-indicator" [class.connected]="appState.connectionStatus() === 'connected'">
+        <span class="pulse-dot"></span>
+        <span class="ws-label font-mono">
+          WS: {{ (appState.connectionStatus() | uppercase) }}
+        </span>
+      </div>
+
+      <!-- Backend Health Status -->
+      <div class="health-indicator">
+        <app-status-badge
+          [status]="appState.systemHealth() ? 'HEALTHY' : 'OFFLINE'"
+          size="sm">
+        </app-status-badge>
+      </div>
+
+      <!-- Manual Sync Button -->
+      <button class="btn btn-secondary btn-xs sync-btn" (click)="appState.refreshAll()" title="Synchronize state from authoritative backend">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="23 4 23 10 17 10"></polyline>
+          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Shell Body: Sidebar + Viewport -->
+  <div class="shell-body">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="sidebar-group-title">COMMAND & CONTROL</div>
+      <nav class="nav-list">
+        @for (item of navItems; track item.route) {
+          <a
+            [routerLink]="item.route"
+            routerLinkActive="active"
+            class="nav-link">
+            <span class="nav-icon">
+              @switch (item.icon) {
+                @case ('grid') {
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="14" width="7" height="7"></rect>
+                    <rect x="3" y="14" width="7" height="7"></rect>
+                  </svg>
+                }
+                @case ('cpu') {
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
+                    <rect x="9" y="9" width="6" height="6"></rect>
+                    <line x1="9" y1="1" x2="9" y2="4"></line>
+                    <line x1="15" y1="1" x2="15" y2="4"></line>
+                    <line x1="9" y1="20" x2="9" y2="23"></line>
+                    <line x1="15" y1="20" x2="15" y2="23"></line>
+                    <line x1="20" y1="9" x2="23" y2="9"></line>
+                    <line x1="20" y1="14" x2="23" y2="14"></line>
+                    <line x1="1" y1="9" x2="4" y2="9"></line>
+                    <line x1="1" y1="14" x2="4" y2="14"></line>
+                  </svg>
+                }
+                @case ('alert-triangle') {
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                    <line x1="12" y1="9" x2="12" y2="13"></line>
+                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                  </svg>
+                }
+                @case ('target') {
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <circle cx="12" cy="12" r="6"></circle>
+                    <circle cx="12" cy="12" r="2"></circle>
+                  </svg>
+                }
+                @case ('globe') {
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="2" y1="12" x2="22" y2="12"></line>
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                  </svg>
+                }
+                @case ('eye') {
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
+                }
+                @case ('activity') {
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                  </svg>
+                }
+                @case ('git-commit') {
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="4"></circle>
+                    <line x1="1.05" y1="12" x2="7" y2="12"></line>
+                    <line x1="17.01" y1="12" x2="22.96" y2="12"></line>
+                  </svg>
+                }
+                @case ('layers') {
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                    <polyline points="2 17 12 22 22 17"></polyline>
+                    <polyline points="2 12 12 17 22 12"></polyline>
+                  </svg>
+                }
+                @case ('settings') {
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                  </svg>
+                }
+              }
+            </span>
+            <span class="nav-label">{{ item.label }}</span>
+            @if (item.badge && item.badge()) {
+              <span class="nav-badge font-mono">{{ item.badge() }}</span>
+            }
+          </a>
+        }
+      </nav>
+
+      <!-- Fleet Mini Status in Sidebar Footer -->
+      <div class="sidebar-footer">
+        <div class="sf-title font-mono">4 OPERATIONAL PERSONAS</div>
+        <div class="personas-dots">
+          <span class="p-dot vision" title="ATLAS Vision (Alpha)">V</span>
+          <span class="p-dot glass" title="ATLAS Glass (Recon)">G</span>
+          <span class="p-dot drone" title="ATLAS Drone (Sentinel)">D</span>
+          <span class="p-dot rover" title="ATLAS Rover (Vanguard)">R</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-viewport">
+      <router-outlet></router-outlet>
+    </main>
   </div>
 
+  <!-- Persistent Global Command Bar -->
+  <footer class="shell-footer">
+    <app-command-bar></app-command-bar>
+  </footer>
 </div>

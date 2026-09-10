@@ -132,9 +132,9 @@ class TwinPosition:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "TwinPosition":
         return cls(
-            latitude=float(data.get("latitude", 0.0)),
-            longitude=float(data.get("longitude", 0.0)),
-            altitude=float(data.get("altitude", 0.0)),
+            latitude=float(data.get("latitude", data.get("x", 0.0))),
+            longitude=float(data.get("longitude", data.get("y", 0.0))),
+            altitude=float(data.get("altitude", data.get("z", 0.0))),
             heading=float(data.get("heading", 0.0)),
             speed=float(data.get("speed", 0.0)),
         )

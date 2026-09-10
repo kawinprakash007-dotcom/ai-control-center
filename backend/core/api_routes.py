@@ -55,6 +55,7 @@ def get_health(request: Request):
         "status": "healthy" if not atlas.shutting_down else "shutting_down",
         "timestamp": time.time(),
         "app_env": atlas.settings.app_env,
+        "demo_mode": atlas.settings.demo_mode,
     }
 
 
@@ -78,6 +79,7 @@ def get_ready(request: Request):
             "cognitive_runtime": atlas.cognitive_runtime is not None,
         },
         "simulation_mode": atlas.settings.is_simulation(),
+        "demo_mode": atlas.settings.demo_mode,
     }
 
 
@@ -106,6 +108,11 @@ async def post_chat(
             atlas.cognitive_runtime.execute_turn,
             data.message,
         )
+        if atlas.trace_store and turn_result.trace:
+            try:
+                atlas.trace_store.save_trace(turn_result.trace)
+            except Exception:
+                pass
         execution_time = turn_result.trace.duration_seconds if (turn_result.trace and hasattr(turn_result.trace, "duration_seconds")) else 0.0
         trace_id = turn_result.trace.trace_id if (turn_result.trace and hasattr(turn_result.trace, "trace_id")) else ""
         return {
@@ -165,18 +172,70 @@ def post_observation(
         )
         res = atlas.central_orchestrator.process_ingress(env)
         is_success = res.status in ("SUCCESS", "NOOP", "NO_ACTION")
+
+        # Extract structured details for judge-facing traceability
+        serialized_situations = [
+            {
+                "situation_id": s.situation_id,
+                "category": s.category.value if hasattr(s.category, "value") else str(s.category),
+                "severity": s.severity.value if hasattr(s.severity, "value") else str(s.severity),
+                "status": s.status.value if hasattr(s.status, "value") else str(s.status),
+                "title": getattr(s, "title", ""),
+                "description": getattr(s, "description", ""),
+            }
+            for s in res.situations_fused
+        ]
+        serialized_transitions = [
+            {
+                "transition_id": t.transition_id,
+                "entity_id": t.entity_id,
+                "property_name": t.property_name,
+                "transition_type": t.transition_type.value if hasattr(t.transition_type, "value") else str(t.transition_type),
+                "from_version": t.from_version,
+                "to_version": t.to_version,
+            }
+            for t in res.world_transitions
+        ]
+        serialized_goals = [
+            {
+                "goal_id": getattr(g, "id", getattr(g, "goal_id", "")),
+                "title": getattr(g, "title", getattr(g, "original_goal", "")),
+                "status": g.status.value if hasattr(g.status, "value") else str(g.status),
+                "priority": g.priority.value if hasattr(g.priority, "value") else str(g.priority),
+            }
+            for g in res.goals_created
+        ]
+        serialized_tool_results = [
+            {
+                "capability": getattr(t, "capability", ""),
+                "action": getattr(t, "action", ""),
+                "success": getattr(t, "success", True),
+                "call_id": getattr(t, "call_id", ""),
+            }
+            for t in res.tool_results
+        ]
+
         return {
             "success": is_success,
             "status": res.status,
+            "observation_id": obs.observation_id,
+            "correlation_id": obs.correlation_id,
             "orchestration_id": res.cycle_id,
             "cycle_id": res.cycle_id,
             "cycle_count": 1 if res.cycle_id else 0,
             "observations_ingested_count": len(res.observations_ingested),
             "situations_fused_count": len(res.situations_fused),
             "world_transitions_count": len(res.world_transitions),
+            "events_evaluated_count": len(res.events_evaluated),
+            "autonomy_decisions_count": len(res.autonomy_decisions),
             "goals_created_count": len(res.goals_created),
             "tool_results_count": len(res.tool_results),
             "duration_seconds": res.duration_seconds,
+            "causal_trace": res.causal_trace,
+            "situations": serialized_situations,
+            "world_transitions": serialized_transitions,
+            "goals": serialized_goals,
+            "tool_results": serialized_tool_results,
         }
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=f"Observation validation error: {str(ve)}")

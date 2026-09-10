@@ -165,22 +165,43 @@ def initialize_application_state(
     app_state.device_gateway = device_gw
 
     # 7. Policy Engine & Tool Orchestrator
-    policy_engine = StandardPolicyEngine()
+    policy_engine = StandardPolicyEngine(demo_mode=cfg.demo_mode)
     app_state.policy_engine = policy_engine
 
     registry = CapabilityRegistry()
     registry.register("device_gateway", DeviceGatewayCapability(device_gw))
+    if cfg.demo_mode:
+        from computer.demo_app_capability import DemoAppCapability
+        registry.register("computer_app", DemoAppCapability())
 
     tool_orchestrator = ToolOrchestrator(
         registry=registry,
         policy_engine=policy_engine,
+        demo_mode=cfg.demo_mode,
     )
     app_state.tool_orchestrator = tool_orchestrator
 
-    # 8. Cognitive Runtime
+    # 8. Execution Engine & Cognitive Runtime
+    from brain.router import Router
+    from brain.execution import StandardExecutionEngine
+
+    router = Router(
+        registry=registry,
+        orchestrator=tool_orchestrator,
+        policy_engine=policy_engine,
+        demo_mode=cfg.demo_mode,
+    )
+    execution_engine = StandardExecutionEngine(
+        router=router,
+        policy_engine=policy_engine,
+        demo_mode=cfg.demo_mode,
+    )
+
     cognitive_runtime = CognitiveRuntime(
+        execution_engine=execution_engine,
         policy_engine=policy_engine,
         event_sink=event_sink,
+        demo_mode=cfg.demo_mode,
     )
     app_state.cognitive_runtime = cognitive_runtime
 
@@ -251,7 +272,28 @@ def initialize_application_state(
     app_state.situation_intelligence = sit_intel
     app_state.mission_coordinator = m_coord
 
-    # 13b. Multimodal Perception Contracts (Phase 6.5a)
+    # 13c. Authoritative Live State Capability (Phase 6.6)
+    from tools.live_state_capability import LiveStateCapability
+    live_state = LiveStateCapability(
+        device_gateway=app_state.device_gateway,
+        world_store=app_state.world_store,
+        situation_engine=app_state.fusion_engine,
+        goal_manager=app_state.goal_manager,
+    )
+    registry.register("live_state", live_state)
+    registry.register("device", live_state)
+
+    # Wire live authorities into CognitiveRuntime
+    cognitive_runtime.device_gateway = app_state.device_gateway
+    cognitive_runtime.world_store = app_state.world_store
+    cognitive_runtime.situation_engine = app_state.fusion_engine
+    cognitive_runtime.goal_manager = app_state.goal_manager
+    cognitive_runtime.live_state_capability = live_state
+    if hasattr(cognitive_runtime.execution_engine, "router") and hasattr(cognitive_runtime.execution_engine.router, "registry"):
+        cognitive_runtime.execution_engine.router.registry.register("live_state", live_state)
+        cognitive_runtime.execution_engine.router.registry.register("device", live_state)
+
+    # 13d. Multimodal Perception Contracts (Phase 6.5a)
     app_state.perception_registry = PerceptionProviderRegistry()
     app_state.perception_normalizer = PerceptionObservationNormalizer()
 
@@ -267,6 +309,12 @@ def initialize_application_state(
         device_gw.register_device(drone)
         device_gw.register_device(glass)
         device_gw.register_device(rover)
+
+        if app_state.input_gateway:
+            app_state.input_gateway.register_device(vision)
+            app_state.input_gateway.register_device(drone)
+            app_state.input_gateway.register_device(glass)
+            app_state.input_gateway.register_device(rover)
 
         device_gw.register_adapter(vision_adapter, device_id="ATLAS_VISION_01")
         device_gw.register_adapter(drone_adapter, device_id="ATLAS_DRONE_01")

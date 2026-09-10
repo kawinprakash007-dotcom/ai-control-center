@@ -13,10 +13,17 @@ __pycache__/
 .pytest_cache/
 
 # ==========================
-# Database
+# Database & Traces
 # ==========================
 
 *.db
+*.db-shm
+*.db-wal
+/backend/storage/
+/traces/
+/backend/traces/
+
+
 
 # ==========================
 # Environment

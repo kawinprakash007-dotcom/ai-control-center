@@ -1,189 +1,100 @@
-import {
-  Component,
-  NgZone,
-  ChangeDetectorRef
-} from '@angular/core';
-
-import {
-  HttpClient
-} from '@angular/common/http';
-
-import {
-  FormsModule
-} from '@angular/forms';
+import { Component, inject, OnInit, OnDestroy } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { RouterModule, RouterLink, RouterLinkActive } from '@angular/router';
+import { AppStateService } from './core/state/app-state.service';
+import { StatusBadgeComponent } from './shared/components/status-badge/status-badge.component';
+import { CommandBarComponent } from './shared/components/command-bar/command-bar.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [FormsModule],
+  imports: [
+    CommonModule,
+    RouterModule,
+    RouterLink,
+    RouterLinkActive,
+    StatusBadgeComponent,
+    CommandBarComponent,
+  ],
   templateUrl: './app.html',
   styleUrls: ['./app.css']
 })
-export class App {
+export class App implements OnInit, OnDestroy {
+  public appState = inject(AppStateService);
+  public currentTime = '';
+  private timer: any = null;
 
-  userMessage: string = '';
-  aiResponse: string = '';
-  isListening: boolean = false;
+  public navItems = [
+    {
+      label: 'Command Center',
+      route: '/command-center',
+      icon: 'grid'
+    },
+    {
+      label: 'Autonomous Fleet',
+      route: '/products',
+      icon: 'cpu',
+      badge: () => this.appState.onlineProductsCount() + '/' + this.appState.products().length
+    },
+    {
+      label: 'Situation Intel',
+      route: '/situations',
+      icon: 'alert-triangle',
+      badge: () => this.appState.criticalSituationsCount() > 0 ? `${this.appState.criticalSituationsCount()}!` : null
+    },
+    {
+      label: 'Tactical Missions',
+      route: '/missions',
+      icon: 'target',
+      badge: () => this.appState.activeGoalsCount() > 0 ? `${this.appState.activeGoalsCount()}` : null
+    },
+    {
+      label: 'World State Twin',
+      route: '/world',
+      icon: 'globe'
+    },
+    {
+      label: 'Perception Console',
+      route: '/perception',
+      icon: 'eye'
+    },
+    {
+      label: 'Live Event Stream',
+      route: '/events',
+      icon: 'activity'
+    },
+    {
+      label: 'Cognitive Traces',
+      route: '/traces',
+      icon: 'git-commit'
+    },
+    {
+      label: 'Twin Simulation',
+      route: '/simulation',
+      icon: 'layers'
+    },
+    {
+      label: 'Settings & Diag',
+      route: '/settings',
+      icon: 'settings'
+    },
+  ];
 
-  constructor(
-    private http: HttpClient,
-    private zone: NgZone,
-    private cdr: ChangeDetectorRef
-  ) {}
-
-  startListening() {
-
-    const SpeechRecognition =
-      (window as any).SpeechRecognition ||
-      (window as any).webkitSpeechRecognition;
-
-    if (!SpeechRecognition) {
-
-      alert(
-        'Speech Recognition not supported in this browser.'
-      );
-
-      return;
+  ngOnInit(): void {
+    this.updateClock();
+    if (typeof window !== 'undefined') {
+      this.timer = setInterval(() => this.updateClock(), 1000);
     }
-
-    const recognition =
-      new SpeechRecognition();
-
-    recognition.lang = 'en-US';
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-
-    recognition.onstart = () => {
-
-      this.zone.run(() => {
-
-        this.isListening = true;
-        this.cdr.detectChanges();
-
-      });
-
-      console.log('Listening...');
-    };
-
-    recognition.onresult = (event: any) => {
-
-      const text =
-        event.results[0][0].transcript;
-
-      console.log('Recognized:', text);
-
-      this.zone.run(() => {
-
-        this.userMessage = text;
-
-        console.log(
-          'userMessage =',
-          this.userMessage
-        );
-
-        this.cdr.detectChanges();
-
-        this.sendMessage();
-
-      });
-    };
-
-    recognition.onerror = (event: any) => {
-
-      console.error(
-        'Speech Error:',
-        event.error
-      );
-
-      this.zone.run(() => {
-
-        this.isListening = false;
-        this.cdr.detectChanges();
-
-      });
-    };
-
-    recognition.onend = () => {
-
-      console.log(
-        'Recognition ended'
-      );
-
-      this.zone.run(() => {
-
-        this.isListening = false;
-        this.cdr.detectChanges();
-
-      });
-    };
-
-    recognition.start();
   }
 
-  sendMessage() {
-
-    if (!this.userMessage.trim()) {
-      return;
+  ngOnDestroy(): void {
+    if (this.timer) {
+      clearInterval(this.timer);
     }
-
-    console.log(
-      'Sending:',
-      this.userMessage
-    );
-
-    this.http.post<any>(
-      'http://127.0.0.1:8000/chat',
-      {
-        message: this.userMessage
-      }
-    )
-    .subscribe({
-
-      next: (res) => {
-
-        console.log(
-          'Response:',
-          res
-        );
-
-        this.zone.run(() => {
-
-          this.aiResponse =
-            res.response;
-
-          this.cdr.detectChanges();
-
-        });
-      },
-
-      error: (err) => {
-
-        console.error(
-          'Backend Error:',
-          err
-        );
-
-        this.zone.run(() => {
-
-          this.aiResponse =
-            'Could not connect to backend.';
-
-          this.cdr.detectChanges();
-
-        });
-      }
-    });
   }
 
-  test() {
-
-    this.userMessage =
-      'TEST MESSAGE';
-
-    this.aiResponse =
-      'TEST RESPONSE';
-
-    this.cdr.detectChanges();
+  private updateClock(): void {
+    const now = new Date();
+    this.currentTime = now.toTimeString().split(' ')[0] + ' UTC';
   }
 }

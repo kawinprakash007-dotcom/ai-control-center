@@ -89,6 +89,9 @@ _MODALITY_MAP: Dict[str, ModalityType] = {
     "world_state": ModalityType.WORLD_STATE,
     "event": ModalityType.EVENT,
     "user_action": ModalityType.USER_ACTION,
+    "visual": ModalityType.IMAGE,
+    "spatial": ModalityType.GPS,
+    "temporal": ModalityType.TELEMETRY,
 }
 
 
